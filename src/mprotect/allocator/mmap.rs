@@ -29,7 +29,7 @@ impl<T> Allocator<T> for MmapAllocator {
             return Err(super::AllocatorError::MmapFailed(err_no));
         }
         Ok(MemoryRegion { 
-            ptr: ptr as *mut T, 
+            ptr: NonNull::new(ptr as *mut T).ok_or(super::AllocatorError::MmapFailed(-1))?, 
             len: alloc_size, 
             allocator: MmapAllocator { ptr, size: alloc_size }
         })

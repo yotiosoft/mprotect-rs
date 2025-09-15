@@ -1,5 +1,6 @@
 use libc;
 use std::fmt::Display;
+use std::ptr::NonNull;
 
 pub mod mmap;
 
@@ -19,7 +20,7 @@ impl Display for AllocatorError {
 }
 
 pub struct MemoryRegion<A: Allocator<T>, T> {
-    ptr: *mut T,
+    ptr: NonNull<T>,
     len: usize,
     allocator: A,
 }
@@ -41,7 +42,7 @@ impl<A: Allocator<T>, T> MemoryRegion<A, T> {
         self.allocator.allocator_dealloc()
     }
     pub fn ptr(&self) -> *mut T {
-        self.ptr
+        self.ptr.as_ptr()
     }
     pub fn len(&self) -> usize {
         self.len

@@ -1,5 +1,7 @@
 use libc;
 
+mod pkru;
+
 #[repr(i32)]
 pub enum PkeyAccessRights {
     EnableAccessWrite = 0x0,
@@ -26,6 +28,36 @@ impl ProtectionKey {
         } else {
             Ok(ProtectionKey { key: key as u32 })
         }
+    }
+
+    pub fn get_access_rights(&self) -> Result<PkeyAccessRights, super::MprotectError> {
+        let pkru_value = unsafe {
+            pkru::rdpkru()
+        };
+        let rights_bits = (pkru_value >> (self.key * 2)) & 0b11;
+        match rights_bits {
+            0b00 => Ok(PkeyAccessRights::EnableAccessWrite),
+            0b01 => Ok(PkeyAccessRights::DisableAccess),
+            0b10 => Ok(PkeyAccessRights::DisableWrite),
+            0b11 => Ok(PkeyAccessRights::DisableAccess),
+            _ => { unreachable!() }
+        }
+    }
+
+    pub fn set_access_rights(&self, access: PkeyAccessRights) -> Result<(), super::MprotectError> {
+        let pkru_value = unsafe {
+            pkru::rdpkru()
+        };
+        let new_pkru_bits = match access {
+            PkeyAccessRights::EnableAccessWrite => 0b00,
+            PkeyAccessRights::DisableAccess => 0b01,
+            PkeyAccessRights::DisableWrite => 0b10,
+        } << (self.key * 2);
+        let new_pkru_value = pkru_value & !(0b11 << (self.key * 2)) | new_pkru_bits;
+        unsafe {
+            pkru::wrpkru(new_pkru_value);
+        }
+        Ok(())
     }
 
     pub fn key(&self) -> u32 {

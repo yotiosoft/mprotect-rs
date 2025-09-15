@@ -21,7 +21,7 @@ pub enum AccessRights {
 pub struct ProtectedMemory<T> {
     ptr: *mut T,
     len: usize,
-    pkey: Option<ProtectionKey>,
+    pkey_id: Option<u32>,
     allocator: allocator::MemoryRegion<allocator::mmap::MmapAllocator, u8>,
 }
 
@@ -35,12 +35,12 @@ impl<T> ProtectedMemory<T> {
         Ok(Self {
             ptr: allocator.ptr() as *mut T,
             len: std::mem::size_of::<T>(),
-            pkey: None,
+            pkey_id: None,
             allocator,
         })
     }
 
-    pub fn with_pkey_mprotect(access_rights: AccessRights, pkey: ProtectionKey) -> Result<Self, super::MprotectError> {
+    pub fn with_pkey_mprotect(access_rights: AccessRights, pkey: &ProtectionKey) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
@@ -65,9 +65,41 @@ impl<T> ProtectedMemory<T> {
         Ok(Self {
             ptr: allocator.ptr() as *mut T,
             len: std::mem::size_of::<T>(),
-            pkey: Some(pkey),
+            pkey_id: Some(pkey.key()),
             allocator,
         })
+    }
+
+    pub fn mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+        let ret = unsafe {
+            libc::mprotect(
+                self.ptr as *mut libc::c_void,
+                self.len,
+                access_rights as i32,
+            )
+        };
+        if ret != 0 {
+            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
+            return Err(super::MprotectError::MprotectFailed(err_no));
+        }
+        Ok(())
+    }
+
+    pub fn pkey_mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+        let ret = unsafe {
+            libc::syscall(
+                libc::SYS_pkey_mprotect,
+                self.ptr as *mut libc::c_void,
+                self.len,
+                access_rights as i32,
+                self.pkey_id
+            )
+        };
+        if ret != 0 {
+            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
+            return Err(super::MprotectError::PkeyMprotectFailed(err_no));
+        }
+        Ok(())
     }
 
     pub fn ptr(&self) -> *mut T {
@@ -78,8 +110,16 @@ impl<T> ProtectedMemory<T> {
         self.len
     }
 
-    pub fn pkey(&self) -> Option<&ProtectionKey> {
-        self.pkey.as_ref()
+    pub fn pkey(&self) -> Option<u32> {
+        self.pkey_id
+    }
+
+    pub fn as_mut(&mut self) -> &mut T {
+        unsafe { &mut *self.ptr }
+    }
+
+    pub fn as_ref(&self) -> &T {
+        unsafe { &*self.ptr }
     }
 }
 
