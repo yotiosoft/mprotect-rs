@@ -46,7 +46,6 @@ impl ProtectionKey {
         let pkru_value = unsafe {
             pkru::rdpkru()
         };
-        println!("Current PKRU value: {:#x}", pkru_value);
         let rights_bits = (pkru_value >> (self.key * 2)) & 0b11;
         match rights_bits {
             0b00 => PkeyAccessRights::EnableAccessWrite,

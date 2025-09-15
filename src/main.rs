@@ -1,8 +1,7 @@
 use mprotect_rs::*;
 
-use std::process::{ Command, Stdio };
+use std::process::Command;
 use std::os::unix::process::ExitStatusExt;
-use std::io;
 
 fn child_pkey_workloads() -> Result<(), MprotectError> {
     let pkey = ProtectionKey::new(PkeyAccessRights::EnableAccessWrite)?;
