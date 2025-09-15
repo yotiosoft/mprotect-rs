@@ -7,7 +7,7 @@ pub struct MmapAllocator {
 }
 
 impl<T> Allocator<T> for MmapAllocator {
-    fn allocator_alloc(access_rights: i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
+    fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let page_size = unsafe {
             libc::sysconf(libc::_SC_PAGESIZE) as usize
         };
@@ -18,7 +18,7 @@ impl<T> Allocator<T> for MmapAllocator {
             libc::mmap(
                 std::ptr::null_mut(),
                 alloc_size,
-                access_rights as i32,
+                access_rights.clone(),
                 libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
                 -1,
                 0,

@@ -6,6 +6,7 @@ pub use mprotect::*;
 
 pub type Errno = i32;
 
+#[derive(Debug)]
 pub enum MprotectError {
     PkeyAllocFailed(Errno),
     MemoryAllocationFailed(Errno),

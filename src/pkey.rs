@@ -2,6 +2,7 @@ use libc;
 
 #[repr(i32)]
 pub enum PkeyAccessRights {
+    EnableAccessWrite = 0x0,
     DisableAccess = 0x1,
     DisableWrite = 0x2,
 }

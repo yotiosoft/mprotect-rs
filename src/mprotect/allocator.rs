@@ -25,7 +25,7 @@ pub struct MemoryRegion<A: Allocator<T>, T> {
 }
 
 pub trait Allocator<T> {
-    fn allocator_alloc(prot: i32) -> Result<MemoryRegion<Self, T>, AllocatorError>
+    fn allocator_alloc(prot: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError>
     where
         Self: Sized;
 
@@ -33,13 +33,17 @@ pub trait Allocator<T> {
 }
 
 impl<A: Allocator<T>, T> MemoryRegion<A, T> {
-    pub fn allocate(access_rights: i32) -> Result<Self, AllocatorError> {
-        A::allocator_alloc(access_rights)
+    pub fn allocate(access_rights: &super::AccessRights) -> Result<Self, AllocatorError> {
+        let access_rights = *access_rights as i32;
+        A::allocator_alloc(&access_rights)
     }
     pub fn deallocate(&self) -> Result<(), AllocatorError> {
         self.allocator.allocator_dealloc()
     }
     pub fn ptr(&self) -> *mut T {
         self.ptr
+    }
+    pub fn len(&self) -> usize {
+        self.len
     }
 }

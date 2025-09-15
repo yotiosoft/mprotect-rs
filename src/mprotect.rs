@@ -5,6 +5,7 @@ use super::ProtectionKey;
 
 mod allocator;
 
+#[derive(Clone, Copy)]
 #[repr(i32)]
 pub enum AccessRights {
     None = libc::PROT_NONE,
@@ -26,7 +27,7 @@ pub struct ProtectedMemory<T> {
 
 impl<T> ProtectedMemory<T> {
     pub fn with_mprotect(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let allocator = allocator::MemoryRegion::allocate(access_rights as i32)
+        let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
                 allocator::AllocatorError::MunmapFailed(errno) => errno,
@@ -37,6 +38,48 @@ impl<T> ProtectedMemory<T> {
             pkey: None,
             allocator,
         })
+    }
+
+    pub fn with_pkey_mprotect(access_rights: AccessRights, pkey: ProtectionKey) -> Result<Self, super::MprotectError> {
+        let allocator = allocator::MemoryRegion::allocate(&access_rights)
+            .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
+                allocator::AllocatorError::MmapFailed(errno) => errno,
+                allocator::AllocatorError::MunmapFailed(errno) => errno,
+            }))?;
+        // Set the protection key for the allocated memory
+        let ret = unsafe {
+            libc::syscall(
+                libc::SYS_pkey_mprotect,
+                allocator.ptr() as *mut libc::c_void,
+                allocator.len(),
+                access_rights as i32,
+                pkey.key(),
+            )
+        };
+        if ret != 0 {
+            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
+            // Clean up allocated memory before returning error
+            let _ = allocator.deallocate();
+            return Err(super::MprotectError::MemoryAllocationFailed(err_no));
+        }
+        Ok(Self {
+            ptr: allocator.ptr() as *mut T,
+            len: std::mem::size_of::<T>(),
+            pkey: Some(pkey),
+            allocator,
+        })
+    }
+
+    pub fn ptr(&self) -> *mut T {
+        self.ptr
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn pkey(&self) -> Option<&ProtectionKey> {
+        self.pkey.as_ref()
     }
 }
 
