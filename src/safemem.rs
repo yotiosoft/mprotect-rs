@@ -1,6 +1,15 @@
 pub use crate::mprotect::*;
 pub use crate::pkey::*;
 
+use std::ops::{Deref, DerefMut};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SafeProtectedMemoryError {
+    ReadAccessViolation,
+    WriteAccessViolation,
+    ExecuteAccessViolation,
+}
+
 pub struct SafeProtectedMemory<A: allocator::Allocator<T>, T> {
     memory: ProtectedMemory<A, T>,
     pkey: Option<ProtectionKey>,
@@ -33,6 +42,20 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
         self.memory.region_access_rights()
     }
 
+    pub fn read(&self) -> Result<ProtectedGuard<'_, A, T>, super::SafeProtectedMemoryError> {
+        if !self.can_read() {
+            return Err(super::SafeProtectedMemoryError::ReadAccessViolation);
+        }
+        Ok(ProtectedGuard { memory: self })
+    }
+
+    pub fn write(&mut self) -> Result<ProtectedGuardMut<'_, A, T>, super::SafeProtectedMemoryError> {
+        if !self.can_write() {
+            return Err(super::SafeProtectedMemoryError::WriteAccessViolation);
+        }
+        Ok(ProtectedGuardMut { memory: self })
+    }
+
     fn can_write(&self) -> bool {
         let mut can_write = true;
         if let Some(pkey) = &self.pkey {
@@ -60,18 +83,38 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
 
         can_read
     }
+}
 
-    fn can_execute(&self) -> bool {
-        let mut can_execute = true;
-        if let Some(pkey) = &self.pkey {
-            if pkey.access_rights() == PkeyAccessRights::DisableAccess {
-                can_execute = false;
-            }
-        }
-        if self.region_access_rights() == AccessRights::None || self.region_access_rights() == AccessRights::Read || self.region_access_rights() == AccessRights::Write || self.region_access_rights() == AccessRights::ReadWrite {
-            can_execute = false;
-        }
+pub struct ProtectedGuard<'a, A: allocator::Allocator<T>, T> {
+    memory: &'a SafeProtectedMemory<A, T>,
+}
 
-        can_execute
+impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuard<'a, A, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            self.memory.memory.ptr().as_ref().unwrap()      // NonNull<T>
+        }
+    }
+}
+
+pub struct ProtectedGuardMut<'a, A: allocator::Allocator<T>, T> {
+    memory: &'a mut SafeProtectedMemory<A, T>,
+}
+
+impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuardMut<'a, A, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            self.memory.memory.ptr().as_ref().unwrap()      // NonNull<T>
+        }
+    }
+}
+
+impl<'a, A: allocator::Allocator<T>, T> DerefMut for ProtectedGuardMut<'a, A, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe {
+            self.memory.memory.ptr().as_mut().unwrap()      // NonNull<T>
+        }
     }
 }

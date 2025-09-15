@@ -3,6 +3,8 @@ use core::panic;
 use libc;
 use super::ProtectionKey;
 
+use std::ptr::NonNull;
+
 pub mod allocator;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,7 +25,7 @@ pub enum AllocatorType {
 }
 
 pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
-    ptr: *mut T,
+    ptr: NonNull<T>,
     len: usize,
     pkey_id: Option<u32>,
     allocator: allocator::MemoryRegion<A, T>,
@@ -39,7 +41,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
                 allocator::AllocatorError::LayoutError => -1,
             }))?;
         Ok(Self {
-            ptr: allocator.ptr() as *mut T,
+            ptr: NonNull::new(allocator.ptr() as *mut T).ok_or(super::MprotectError::MemoryAllocationFailed(-1))?,
             len: std::mem::size_of::<T>(),
             pkey_id: None,
             allocator,
@@ -64,7 +66,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
             }))?;
             
         Ok(Self {
-            ptr: allocator.ptr() as *mut T,
+            ptr: NonNull::new(allocator.ptr() as *mut T).ok_or(super::MprotectError::MemoryAllocationFailed(-1))?,
             len: std::mem::size_of::<T>(),
             pkey_id: Some(pkey.key()),
             allocator,
@@ -75,7 +77,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     pub fn mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         let ret = unsafe {
             libc::mprotect(
-                self.ptr as *mut libc::c_void,
+                self.ptr.as_ptr() as *mut libc::c_void,
                 self.len,
                 access_rights as i32,
             )
@@ -111,11 +113,11 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
 
     pub fn pkey_mprotect(&mut self, access_rights: AccessRights, pkey: &ProtectionKey) -> Result<(), super::MprotectError> {
         self.pkey_id = Some(pkey.key());
-        Self::impl_pkey_mprotect(access_rights, self.ptr as *mut libc::c_void, self.len, self.pkey_id)
+        Self::impl_pkey_mprotect(access_rights, self.ptr.as_ptr() as *mut libc::c_void, self.len, self.pkey_id)
     }
 
     pub fn ptr(&self) -> *mut T {
-        self.ptr
+        self.ptr.as_ptr()
     }
 
     pub fn len(&self) -> usize {
@@ -131,11 +133,11 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     }
 
     pub fn as_mut(&mut self) -> &mut T {
-        unsafe { &mut *self.ptr }
+        unsafe { &mut *self.ptr.as_ptr() }
     }
 
     pub fn as_ref(&self) -> &T {
-        unsafe { &*self.ptr }
+        unsafe { &*self.ptr.as_ptr() }
     }
 }
 
