@@ -1,6 +1,7 @@
 use libc;
+use std::fmt::Display;
 
-mod mmap;
+pub mod mmap;
 
 #[repr(i32)]
 pub enum AllocatorError {
@@ -8,12 +9,37 @@ pub enum AllocatorError {
     MunmapFailed(i32),
 }
 
-pub struct MemoryRegion<T> {
+impl Display for AllocatorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AllocatorError::MmapFailed(errno) => write!(f, "mmap failed with errno {}", errno),
+            AllocatorError::MunmapFailed(errno) => write!(f, "munmap failed with errno {}", errno),
+        }
+    }
+}
+
+pub struct MemoryRegion<A: Allocator<T>, T> {
     ptr: *mut T,
     len: usize,
+    allocator: A,
 }
 
 pub trait Allocator<T> {
-    fn allocate(size: usize, prot: i32) -> Result<MemoryRegion<T>, AllocatorError>;
-    fn deallocate(ptr: *mut libc::c_void, size: usize) -> Result<(), AllocatorError>;
+    fn allocator_alloc(prot: i32) -> Result<MemoryRegion<Self, T>, AllocatorError>
+    where
+        Self: Sized;
+
+    fn allocator_dealloc(&self) -> Result<(), AllocatorError>;
+}
+
+impl<A: Allocator<T>, T> MemoryRegion<A, T> {
+    pub fn allocate(access_rights: i32) -> Result<Self, AllocatorError> {
+        A::allocator_alloc(access_rights)
+    }
+    pub fn deallocate(&self) -> Result<(), AllocatorError> {
+        self.allocator.allocator_dealloc()
+    }
+    pub fn ptr(&self) -> *mut T {
+        self.ptr
+    }
 }

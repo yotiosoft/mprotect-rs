@@ -1,3 +1,5 @@
+use core::panic;
+
 use libc;
 use super::ProtectionKey;
 
@@ -19,46 +21,30 @@ pub struct ProtectedMemory<T> {
     ptr: *mut T,
     len: usize,
     pkey: Option<ProtectionKey>,
+    allocator: allocator::MemoryRegion<allocator::mmap::MmapAllocator, u8>,
 }
 
 impl<T> ProtectedMemory<T> {
     pub fn with_mprotect(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let page_size = unsafe {
-            libc::sysconf(libc::_SC_PAGESIZE) as usize
-        };
-        let alloc_size = ((std::mem::size_of::<T>() + page_size - 1) / page_size) * page_size;
-    
-        // Allocate anonymous memory
-        let ptr = unsafe {
-            libc::mmap(
-                std::ptr::null_mut(),
-                alloc_size,
-                access_rights as i32,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-                -1,
-                0,
-            )
-        };
-        if ptr == libc::MAP_FAILED {
-            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
-            return Err(super::MprotectError::MemoryAllocationFailed(err_no));
-        }
-
+        let allocator = allocator::MemoryRegion::allocate(access_rights as i32)
+            .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
+                allocator::AllocatorError::MmapFailed(errno) => errno,
+                allocator::AllocatorError::MunmapFailed(errno) => errno,
+            }))?;
         Ok(Self {
-            ptr: ptr as *mut T,
-            len: alloc_size,
+            ptr: allocator.ptr() as *mut T,
+            len: std::mem::size_of::<T>(),
             pkey: None,
+            allocator,
         })
     }
 }
 
 impl<T> Drop for ProtectedMemory<T> {
     fn drop(&mut self) {
-        unsafe {
-            // drop the inner value
-            std::ptr::drop_in_place(self.ptr);
-            // unmap the memory
-            libc::munmap(self.ptr as *mut libc::c_void, self.len);
+        let ret = self.allocator.deallocate();
+        if let Err(e) = ret {
+            panic!("Failed to deallocate memory: {:?}", e.to_string());
         }
     }
 }

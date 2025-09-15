@@ -1,7 +1,13 @@
 use super::*;
+use libc;
 
-impl<T> Allocator for ProtectedMemory<T> {
-    fn allocate(size: usize, access_rights: i32) -> Result<MemoryRegion<T>, AllocatorError> {
+pub struct MmapAllocator {
+    ptr: *mut libc::c_void,
+    size: usize,
+}
+
+impl<T> Allocator<T> for MmapAllocator {
+    fn allocator_alloc(access_rights: i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let page_size = unsafe {
             libc::sysconf(libc::_SC_PAGESIZE) as usize
         };
@@ -22,14 +28,27 @@ impl<T> Allocator for ProtectedMemory<T> {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
             return Err(super::AllocatorError::MmapFailed(err_no));
         }
-        Ok(Self {
-            ptr: ptr as *mut T,
-            len: alloc_size,
+        Ok(MemoryRegion { 
+            ptr: ptr as *mut T, 
+            len: alloc_size, 
+            allocator: MmapAllocator { ptr, size: alloc_size }
         })
     }
 
-    fn deallocate(ptr: *mut libc::c_void, size: usize) -> Result<(), AllocatorError> {
-        mmap::MmapAllocator::deallocate(ptr, size)
+    fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
+        // drop the inner value
+        unsafe {
+            std::ptr::drop_in_place(self.ptr);
+        }
+        // unmap the memory
+        let ret = unsafe {
+            libc::munmap(self.ptr as *mut libc::c_void, self.size)
+        };
+        if ret != 0 {
+            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
+            return Err(super::AllocatorError::MunmapFailed(err_no));
+        }
+        Ok(())
     }
     
 }
