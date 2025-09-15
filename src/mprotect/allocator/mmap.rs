@@ -1,12 +1,12 @@
 use super::*;
 use libc;
 
-pub struct MmapAllocator {
+pub struct Mmap {
     ptr: *mut libc::c_void,
     size: usize,
 }
 
-impl<T> Allocator<T> for MmapAllocator {
+impl<T> Allocator<T> for Mmap {
     fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let page_size = unsafe {
             libc::sysconf(libc::_SC_PAGESIZE) as usize
@@ -31,7 +31,7 @@ impl<T> Allocator<T> for MmapAllocator {
         Ok(MemoryRegion { 
             ptr: NonNull::new(ptr as *mut T).ok_or(super::AllocatorError::MmapFailed(-1))?, 
             len: alloc_size, 
-            allocator: MmapAllocator { ptr, size: alloc_size }
+            allocator: Mmap { ptr, size: alloc_size }
         })
     }
 

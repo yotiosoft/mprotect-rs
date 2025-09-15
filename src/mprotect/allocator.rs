@@ -2,12 +2,17 @@ use libc;
 use std::fmt::Display;
 use std::ptr::NonNull;
 
-pub mod mmap;
+mod mmap;
+pub use mmap::Mmap;
+
+mod jmalloc;
+pub use jmalloc::Jmalloc;
 
 #[repr(i32)]
 pub enum AllocatorError {
     MmapFailed(i32),
     MunmapFailed(i32),
+    LayoutError,
 }
 
 impl Display for AllocatorError {
@@ -15,6 +20,7 @@ impl Display for AllocatorError {
         match self {
             AllocatorError::MmapFailed(errno) => write!(f, "mmap failed with errno {}", errno),
             AllocatorError::MunmapFailed(errno) => write!(f, "munmap failed with errno {}", errno),
+            AllocatorError::LayoutError => write!(f, "layout error"),
         }
     }
 }

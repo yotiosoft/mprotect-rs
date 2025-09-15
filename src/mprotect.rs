@@ -3,7 +3,7 @@ use core::panic;
 use libc;
 use super::ProtectionKey;
 
-mod allocator;
+pub mod allocator;
 
 #[derive(Clone, Copy)]
 #[repr(i32)]
@@ -18,19 +18,24 @@ pub enum AccessRights {
     ReadWriteExec = libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC,
 }
 
-pub struct ProtectedMemory<T> {
+pub enum AllocatorType {
+    Mmap,
+}
+
+pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
     ptr: *mut T,
     len: usize,
     pkey_id: Option<u32>,
-    allocator: allocator::MemoryRegion<allocator::mmap::MmapAllocator, u8>,
+    allocator: allocator::MemoryRegion<A, T>,
 }
 
-impl<T> ProtectedMemory<T> {
+impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     pub fn without_pkey(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
                 allocator::AllocatorError::MunmapFailed(errno) => errno,
+                allocator::AllocatorError::LayoutError => -1,
             }))?;
         Ok(Self {
             ptr: allocator.ptr() as *mut T,
@@ -45,6 +50,7 @@ impl<T> ProtectedMemory<T> {
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
                 allocator::AllocatorError::MunmapFailed(errno) => errno,
+                allocator::AllocatorError::LayoutError => -1,
             }))?;
         // Set the protection key for the allocated memory
         let ret = unsafe {
@@ -123,7 +129,7 @@ impl<T> ProtectedMemory<T> {
     }
 }
 
-impl<T> Drop for ProtectedMemory<T> {
+impl<A: allocator::Allocator<T>, T> Drop for ProtectedMemory<A, T> {
     fn drop(&mut self) {
         let ret = self.allocator.deallocate();
         if let Err(e) = ret {
