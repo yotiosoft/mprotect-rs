@@ -26,7 +26,7 @@ pub struct ProtectedMemory<T> {
 }
 
 impl<T> ProtectedMemory<T> {
-    pub fn with_mprotect(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
+    pub fn without_pkey(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
@@ -40,7 +40,7 @@ impl<T> ProtectedMemory<T> {
         })
     }
 
-    pub fn with_pkey_mprotect(access_rights: AccessRights, pkey: &ProtectionKey) -> Result<Self, super::MprotectError> {
+    pub fn with_pkey(access_rights: AccessRights, pkey: &ProtectionKey) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,

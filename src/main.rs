@@ -2,14 +2,15 @@ use mprotect_rs::*;
 
 fn main() -> Result<(), MprotectError> {
     let pkey = ProtectionKey::new(PkeyAccessRights::EnableAccessWrite)?;
-    let mut protected_mem = ProtectedMemory::<u32>::with_pkey_mprotect(AccessRights::ReadWrite, &pkey)?;
+    let mut protected_mem = ProtectedMemory::<u32>::with_pkey(AccessRights::ReadWrite, &pkey)?;
 
-    //let mut protected_mem = ProtectedMemory::<u32>::with_mprotect(AccessRights::Read)?;
+    //let mut protected_mem = ProtectedMemory::<u32>::without_pkey(AccessRights::Read)?;
 
     // Write to the protected memory
-    println!("Set the value to 42");
+    println!("Attempt to write the value 42");
     *protected_mem.as_mut() = 42;
-    println!("Value written: {}", *protected_mem.as_ref());
+    println!("\tValue written: {}", *protected_mem.as_ref());
+    println!("\tWriting succeeded");
 
     // Set the pkey to read-only
     //protected_mem.pkey_mprotect(AccessRights::Read)?;
@@ -17,16 +18,19 @@ fn main() -> Result<(), MprotectError> {
     pkey.set_access_rights(PkeyAccessRights::DisableWrite)?;
 
     // Read from the protected memory
-    println!("Value read: {}", *protected_mem.as_ref());
+    println!("Attempt to read the value");
+    println!("\tValue read: {}", *protected_mem.as_ref());
+    println!("\tReading succeeded");
 
     // Create another pkey and allocate another memory region with it
-    println!("Create another pkey and allocate another memory region with it");
+    println!("Attempt to create another pkey and allocate memory with it");
     let pkey2 = ProtectionKey::new(PkeyAccessRights::EnableAccessWrite)?;
-    println!("Created another pkey {}", pkey2.key());
-    pkey2.set_access_rights(PkeyAccessRights::EnableAccessWrite)?;
-    let mut new_memory = ProtectedMemory::<u32>::with_pkey_mprotect(AccessRights::ReadWrite, &pkey2)?;
+    println!("\tCreated another pkey {}", pkey2.key());
+    let mut new_memory = ProtectedMemory::<u32>::with_pkey(AccessRights::ReadWrite, &pkey2)?;
+    println!("Set the value in pkey {} memory to 100", pkey2.key());
     *new_memory.as_mut() = 100;
-    println!("Value in new memory: {}", *new_memory.as_ref());
+    println!("\tValue in new memory: {}", *new_memory.as_ref());
+    println!("\tWriting to new memory succeeded");
 
     // Set the pkey 1 to no access
     //protected_mem.pkey_mprotect(AccessRights::None)?;
@@ -34,7 +38,7 @@ fn main() -> Result<(), MprotectError> {
     pkey.set_access_rights(PkeyAccessRights::DisableAccess)?;
 
     // This will likely cause a segmentation fault
-    println!("Value read: {}", *protected_mem.as_ref());
-
-    Ok(())
+    println!("Attempt to read the value again (this will likely cause a segmentation fault!)");
+    println!("\tValue read: {}", *protected_mem.as_ref());
+    panic!("This line should not be reached!");
 }
