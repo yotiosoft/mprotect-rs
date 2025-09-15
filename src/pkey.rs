@@ -20,8 +20,10 @@ impl Display for PkeyAccessRights {
     }
 }
 
+#[derive(Clone)]
 pub struct ProtectionKey {
     key: u32,
+    access_rights: PkeyAccessRights,
 }
 impl ProtectionKey {
     pub fn new(access: PkeyAccessRights) -> Result<Self, super::MprotectError> {
@@ -37,7 +39,7 @@ impl ProtectionKey {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
             Err(super::MprotectError::PkeyAllocFailed(err_no))
         } else {
-            Ok(ProtectionKey { key: key as u32 })
+            Ok(ProtectionKey { key: key as u32, access_rights: access } )
         }
     }
 
@@ -74,6 +76,10 @@ impl ProtectionKey {
 
     pub fn key(&self) -> u32 {
         self.key
+    }
+
+    pub fn access_rights(&self) -> PkeyAccessRights {
+        self.access_rights
     }
 }
 

@@ -4,6 +4,9 @@ pub use pkey::*;
 mod mprotect;
 pub use mprotect::*;
 
+mod safemem;
+pub use safemem::*;
+
 pub type Errno = i32;
 
 #[derive(Debug)]

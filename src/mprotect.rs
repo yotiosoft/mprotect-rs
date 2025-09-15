@@ -5,7 +5,7 @@ use super::ProtectionKey;
 
 pub mod allocator;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
 pub enum AccessRights {
     None = libc::PROT_NONE,
@@ -27,6 +27,7 @@ pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
     len: usize,
     pkey_id: Option<u32>,
     allocator: allocator::MemoryRegion<A, T>,
+    region_access_rights: AccessRights,
 }
 
 impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
@@ -42,6 +43,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
             len: std::mem::size_of::<T>(),
             pkey_id: None,
             allocator,
+            region_access_rights: access_rights,
         })
     }
 
@@ -66,6 +68,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
             len: std::mem::size_of::<T>(),
             pkey_id: Some(pkey.key()),
             allocator,
+            region_access_rights: access_rights,
         })
     }
 
@@ -121,6 +124,10 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
 
     pub fn pkey(&self) -> Option<u32> {
         self.pkey_id
+    }
+
+    pub fn region_access_rights(&self) -> AccessRights {
+        self.region_access_rights
     }
 
     pub fn as_mut(&mut self) -> &mut T {
