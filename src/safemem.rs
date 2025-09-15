@@ -59,7 +59,8 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
     fn can_write(&self) -> bool {
         let mut can_write = true;
         if let Some(pkey) = &self.pkey {
-            if pkey.access_rights() == PkeyAccessRights::DisableWrite || pkey.access_rights() == PkeyAccessRights::DisableAccess {
+            let pkey_rights = pkey.get_access_rights();
+            if pkey_rights == PkeyAccessRights::DisableWrite || pkey_rights == PkeyAccessRights::DisableAccess {
                 can_write = false;
             }
         }
@@ -73,7 +74,8 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
     fn can_read(&self) -> bool {
         let mut can_read = true;
         if let Some(pkey) = &self.pkey {
-            if pkey.access_rights() == PkeyAccessRights::DisableAccess {
+            let pkey_rights = pkey.get_access_rights();
+            if pkey_rights == PkeyAccessRights::DisableAccess {
                 can_read = false;
             }
         }

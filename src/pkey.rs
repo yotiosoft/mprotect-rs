@@ -23,7 +23,6 @@ impl Display for PkeyAccessRights {
 #[derive(Clone)]
 pub struct ProtectionKey {
     key: u32,
-    access_rights: PkeyAccessRights,
 }
 impl ProtectionKey {
     pub fn new(access: PkeyAccessRights) -> Result<Self, super::MprotectError> {
@@ -39,21 +38,21 @@ impl ProtectionKey {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
             Err(super::MprotectError::PkeyAllocFailed(err_no))
         } else {
-            Ok(ProtectionKey { key: key as u32, access_rights: access } )
+            Ok(ProtectionKey { key: key as u32 })
         }
     }
 
-    pub fn get_access_rights(&self) -> Result<PkeyAccessRights, super::MprotectError> {
+    pub fn get_access_rights(&self) -> PkeyAccessRights {
         let pkru_value = unsafe {
             pkru::rdpkru()
         };
         println!("Current PKRU value: {:#x}", pkru_value);
         let rights_bits = (pkru_value >> (self.key * 2)) & 0b11;
         match rights_bits {
-            0b00 => Ok(PkeyAccessRights::EnableAccessWrite),
-            0b01 => Ok(PkeyAccessRights::DisableAccess),
-            0b10 => Ok(PkeyAccessRights::DisableWrite),
-            0b11 => Ok(PkeyAccessRights::DisableAccess),
+            0b00 => PkeyAccessRights::EnableAccessWrite,
+            0b01 => PkeyAccessRights::DisableAccess,
+            0b10 => PkeyAccessRights::DisableWrite,
+            0b11 => PkeyAccessRights::DisableAccess,
             _ => { unreachable!() }
         }
     }
@@ -76,10 +75,6 @@ impl ProtectionKey {
 
     pub fn key(&self) -> u32 {
         self.key
-    }
-
-    pub fn access_rights(&self) -> PkeyAccessRights {
-        self.access_rights
     }
 }
 
