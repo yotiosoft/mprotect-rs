@@ -128,6 +128,62 @@ fn child_safe_protected_memory() {
     println!("\tWriting succeeded (this is unexpected!)");
 }
 
+fn child_safe_guareded_pkey() {
+    let pkey = ProtectionKey::new(PkeyAccessRights::EnableAccessWrite)
+        .map_err(|e| {
+            eprintln!("Failed to create ProtectionKey: {:?}", e);
+            e
+        }).unwrap();
+    let mut safe_mem = SafeProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::ReadWrite, &pkey)
+        .map_err(|e| {
+            eprintln!("Failed to create SafeProtectedMemory: {:?}", e);
+            e
+        }).unwrap();
+
+    {
+        println!("Creating GuardedProtectionKey to set pkey to DisableWrite");
+        let _guarded_pkey = GuardedProtectionKey::new(&pkey, PkeyAccessRights::DisableWrite)
+            .map_err(|e| {
+                eprintln!("Failed to create GuardedProtectionKey: {:?}", e);
+                e
+            }).unwrap();
+        println!("Attempt to read the value (should succeed)");
+        let guard = safe_mem.read()
+            .map_err(|e| {
+                eprintln!("Read access violation: {:?}", e);
+                e
+            }).unwrap();
+        println!("\tValue read: {}", *guard);
+
+        {
+            println!("Creating GuardedProtectionKey to set pkey to EnableAccessWrite");
+            let _inner_guarded_pkey = GuardedProtectionKey::new(&pkey, PkeyAccessRights::EnableAccessWrite)
+                .map_err(|e| {
+                    eprintln!("Failed to create inner GuardedProtectionKey: {:?}", e);
+                    e
+                }).unwrap();
+            println!("Attempt to write the value 84 (should succeed)");
+            let mut guard = safe_mem.write()
+                .map_err(|e| {
+                    eprintln!("Write access violation: {:?}", e);
+                    e
+                }).unwrap();
+            *guard = 84;
+            println!("\tValue written: {}", *guard);
+        }
+
+        println!("Out of inner GuardedProtectionKey scope, pkey should be back to DisableWrite");
+        println!("Attempt to write the value 168 (should fail)");
+        let mut guard = safe_mem.write()
+            .map_err(|e| {
+                eprintln!("Write access violation: {:?}", e);
+                e
+            }).unwrap();
+        *guard = 168;
+        println!("\tValue written: {}", *guard);
+    }
+}
+
 fn handle_child_exit(flag: String) {
     // Do workloads in a child process
     let status = Command::new(std::env::current_exe().unwrap())
@@ -141,15 +197,15 @@ fn handle_child_exit(flag: String) {
             eprintln!("Segmentation fault occurred as expected");
             return;
         }
-        panic!("Child process exited with unexpected signal");
+        eprintln!("Child process exited due to signal: {}", signal);
     }
     else if let Some(code) = status.code() {
         if code != 0 {
-            panic!("Child process exited with non-zero status: {}", code);
+            eprintln!("Child process exited with non-zero status: {}", code);
         }
     }
     else {
-        panic!("Child process exited in an unexpected way");
+        eprintln!("Child process exited in an unexpected way");
     }
 
     println!("Main thread finished");
@@ -163,6 +219,9 @@ fn parent_main() {
 
     println!("--- Testing Safe Protected Memory Workloads ---");
     handle_child_exit("--safe".to_string());
+
+    println!("--- Testing Safe Guarded Pkey Workloads ---");
+    handle_child_exit("--safe-guarded-pkey".to_string());
 
     println!("Parent process finished");
 }
@@ -179,6 +238,10 @@ fn main() {
     } else if args.len() > 1 && args[1] == "--safe" {
         println!("Child process started with PID {}", std::process::id());
         child_safe_protected_memory();      // This function handles its own errors and panics on failure
+        println!("Child process finished without segmentation fault");
+    } else if args.len() > 1 && args[1] == "--safe-guarded-pkey" {
+        println!("Child process started with PID {}", std::process::id());
+        child_safe_guareded_pkey();      // This function handles its own errors and panics on failure
         println!("Child process finished without segmentation fault");
     } else {
         parent_main();

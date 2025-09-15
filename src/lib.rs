@@ -7,6 +7,9 @@ pub use mprotect::*;
 mod safemem;
 pub use safemem::*;
 
+mod safeguard;
+pub use safeguard::*;
+
 pub type Errno = i32;
 
 use std::fmt::Display;
