@@ -32,6 +32,24 @@ fn main() -> Result<(), MprotectError> {
     println!("\tValue in new memory: {}", *new_memory.as_ref());
     println!("\tWriting to new memory succeeded");
 
+    // Create another pkey and switch the pkey of the existing memory region to it
+    println!("Attempt to create another pkey and switch the existing memory to it");
+    let pkey3 = ProtectionKey::new(PkeyAccessRights::DisableWrite)?;
+    println!("\tCreated another pkey {}", pkey3.key());
+    protected_mem.pkey_mprotect(AccessRights::Read, &pkey3)?;
+    println!("Switched the existing memory (before: pkey {}, now: pkey {})", pkey.key(), pkey3.key());
+
+    // Read from the memory region (should succeed)
+    println!("Attempt to read the value");
+    println!("\tValue read: {}", *protected_mem.as_ref());
+    println!("\tReading succeeded");
+
+    // Write to the memory region (should fail)
+    println!("Attempt to write the value 84 (this will likely cause a segmentation fault!");
+    *protected_mem.as_mut() = 84;
+    println!("\tValue written: {}", *protected_mem.as_ref());
+    println!("\tWriting succeeded (this is unexpected!)");
+
     // Set the pkey 1 to no access
     //protected_mem.pkey_mprotect(AccessRights::None)?;
     println!("Set pkey {} to no access", pkey.key());

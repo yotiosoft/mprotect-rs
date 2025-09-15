@@ -1,12 +1,23 @@
 use libc;
+use std::fmt::Display;
 
 mod pkru;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
 pub enum PkeyAccessRights {
     EnableAccessWrite = 0x0,
     DisableAccess = 0x1,
     DisableWrite = 0x2,
+}
+impl Display for PkeyAccessRights {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PkeyAccessRights::EnableAccessWrite => write!(f, "Enable Access and Write"),
+            PkeyAccessRights::DisableAccess => write!(f, "Disable Access"),
+            PkeyAccessRights::DisableWrite => write!(f, "Disable Write"),
+        }
+    }
 }
 
 pub struct ProtectionKey {
@@ -34,6 +45,7 @@ impl ProtectionKey {
         let pkru_value = unsafe {
             pkru::rdpkru()
         };
+        println!("Current PKRU value: {:#x}", pkru_value);
         let rights_bits = (pkru_value >> (self.key * 2)) & 0b11;
         match rights_bits {
             0b00 => Ok(PkeyAccessRights::EnableAccessWrite),

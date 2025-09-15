@@ -10,6 +10,7 @@ pub type Errno = i32;
 pub enum MprotectError {
     PkeyAllocFailed(Errno),
     MemoryAllocationFailed(Errno),
+    MemoryDeallocationFailed(Errno),
     MprotectFailed(Errno),
     PkeyMprotectFailed(Errno),
     NoPkeyAssociated,

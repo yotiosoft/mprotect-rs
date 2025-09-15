@@ -53,21 +53,14 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
                 allocator::AllocatorError::LayoutError => -1,
             }))?;
         // Set the protection key for the allocated memory
-        let ret = unsafe {
-            libc::syscall(
-                libc::SYS_pkey_mprotect,
-                allocator.ptr() as *mut libc::c_void,
-                allocator.len(),
-                access_rights as i32,
-                pkey.key(),
-            )
-        };
-        if ret != 0 {
-            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
-            // Clean up allocated memory before returning error
-            let _ = allocator.deallocate();
-            return Err(super::MprotectError::MemoryAllocationFailed(err_no));
-        }
+        Self::impl_pkey_mprotect(access_rights, allocator.ptr() as *mut libc::c_void, allocator.len(), Some(pkey.key()))
+            .map_err(|e| super::MprotectError::PkeyMprotectFailed(match e {
+                super::MprotectError::PkeyMprotectFailed(errno) => errno,
+                super::MprotectError::MprotectFailed(errno) => errno,
+                super::MprotectError::NoPkeyAssociated => -1,
+                _ => -1,
+            }))?;
+            
         Ok(Self {
             ptr: allocator.ptr() as *mut T,
             len: std::mem::size_of::<T>(),
@@ -91,14 +84,19 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
         Ok(())
     }
 
-    pub fn pkey_mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+    fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: Option<u32>) -> Result<(), super::MprotectError> {
+        if let None = pkey_id {
+            return Err(super::MprotectError::NoPkeyAssociated);
+        }
+
+        let pkey_id = pkey_id.unwrap();
         let ret = unsafe {
             libc::syscall(
                 libc::SYS_pkey_mprotect,
-                self.ptr as *mut libc::c_void,
-                self.len,
+                ptr,
+                len,
                 access_rights as i32,
-                self.pkey_id
+                pkey_id
             )
         };
         if ret != 0 {
@@ -106,6 +104,11 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
             return Err(super::MprotectError::PkeyMprotectFailed(err_no));
         }
         Ok(())
+    }
+
+    pub fn pkey_mprotect(&mut self, access_rights: AccessRights, pkey: &ProtectionKey) -> Result<(), super::MprotectError> {
+        self.pkey_id = Some(pkey.key());
+        Self::impl_pkey_mprotect(access_rights, self.ptr as *mut libc::c_void, self.len, self.pkey_id)
     }
 
     pub fn ptr(&self) -> *mut T {
