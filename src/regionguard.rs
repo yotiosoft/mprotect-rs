@@ -1,4 +1,4 @@
-use crate::mprotect::*;
+use crate::{mprotect::*, MprotectError};
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -7,6 +7,7 @@ use std::ops::{Deref, DerefMut};
 pub struct RegionGuard<A: allocator::Allocator<T>, T> {
     memory: UnsafeProtectedRegion<A, T>,
     generation: Rc<Cell<u64>>,
+    access_rights: Rc<Cell<AccessRights>>,
 }
 
 impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
@@ -17,14 +18,9 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
             RegionGuard {
                 memory,
                 generation,
+                access_rights: Rc::new(Cell::new(access_rights)),
             }
         )
-    }
-
-    pub fn set_access(&mut self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
-        self.memory.set_access(access_rights)?;
-        self.invalidate();
-        Ok(())
     }
 
     pub fn invalidate(&self) {
@@ -33,32 +29,32 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     }
 
     pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> {
-        let access_rights = self.memory.region_access_rights();
-        if !access_rights.contains(AccessRights::Read) {
-            return Err(GuardError::InvalidAccessRights);
+        if !self.access_rights.get().contains(AccessRights::Read) {
+            self.memory.set_access(self.access_rights.get().add(AccessRights::Read)).map_err(GuardError::CannotSetAccessRights)?;
         }
 
         let gen = self.generation.get();
         Ok(GuardRef {
-            ptr: &self.memory,
+            ptr: self.memory.as_ref() as *const T,
+            mem: &self.memory,
             gen,
             generation: Rc::clone(&self.generation),
+            access_rights: Rc::clone(&self.access_rights),
         })
     }
 
     pub fn write(&mut self) -> Result<GuardRefMut<'_, A, T>, GuardError> {
-        let access_rights = self.memory.region_access_rights();
-        if !access_rights.contains(AccessRights::Write) {
-            println!("Write access denied: current rights = {:?}", access_rights);
-            return Err(GuardError::InvalidAccessRights);
+        if !self.access_rights.get().contains(AccessRights::Write) {
+            self.memory.set_access(self.access_rights.get().add(AccessRights::Write)).map_err(GuardError::CannotSetAccessRights)?;
         }
-        println!("Write access granted: current rights = {:?}", access_rights);
 
         let gen = self.generation.get();
         Ok(GuardRefMut {
-            ptr: &mut self.memory,
+            ptr: self.memory.as_mut() as *mut T,
+            mem: &mut self.memory,
             gen,
             generation: Rc::clone(&self.generation),
+            access_rights: Rc::clone(&self.access_rights),
         })
     }
 }
@@ -67,6 +63,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
 pub enum GuardError {
     InvalidGeneration,
     InvalidAccessRights,
+    CannotSetAccessRights(MprotectError),
 }
 
 impl std::fmt::Display for GuardError {
@@ -74,20 +71,23 @@ impl std::fmt::Display for GuardError {
         match self {
             GuardError::InvalidGeneration => write!(f, "Invalid generation: the guard reference is no longer valid"),
             GuardError::InvalidAccessRights => write!(f, "Invalid access rights: the memory region does not allow the requested access"),
+            GuardError::CannotSetAccessRights(err) => write!(f, "Cannot set access rights: {}", err),
         }
     }
 }
 
 pub struct GuardRef<'a, A: allocator::Allocator<T>, T> {
-    ptr: &'a UnsafeProtectedRegion<A, T>,
+    ptr: *const T,
+    mem: &'a UnsafeProtectedRegion<A, T>,
     gen: u64,
     generation: Rc<Cell<u64>>,
+    access_rights: Rc<Cell<AccessRights>>,
 }
 
 impl<'a, A: allocator::Allocator<T>, T> GuardRef<'a, A, T> {
     pub fn check_validity(&self) -> Result<&T, GuardError> {
         if self.generation.get() == self.gen {
-            Ok(&self.ptr.as_ref())
+            unsafe { Ok(&*self.ptr) }
         } else {
             Err(GuardError::InvalidGeneration)
         }
@@ -101,10 +101,23 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRef<'a, A, T> {
     }
 }
 
+impl<'a, A: allocator::Allocator<T>, T> Drop for GuardRef<'a, A, T> {
+    fn drop(&mut self) {
+        if self.generation.get() == self.gen {
+            if self.access_rights.get().contains(AccessRights::Read) {
+                let new_access = self.access_rights.get().remove(AccessRights::Read);
+                let _ = self.mem.set_access(new_access);
+            }
+        }
+    }
+}
+
 pub struct GuardRefMut<'a, A: allocator::Allocator<T>, T> {
-    ptr: &'a mut UnsafeProtectedRegion<A, T>,
+    ptr: *mut T,
+    mem: &'a UnsafeProtectedRegion<A, T>,
     gen: u64,
     generation: Rc<Cell<u64>>,
+    access_rights: Rc<Cell<AccessRights>>,
 }
 
 impl<'a, A: allocator::Allocator<T>, T> GuardRefMut<'a, A, T> {
@@ -117,7 +130,7 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRefMut<'a, A, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         if self.is_valid() {
-            self.ptr.as_ref()
+            unsafe { &*self.ptr }
         } else {
             panic!("Failed to deref GuardRefMut: invalid generation");
         }
@@ -127,9 +140,20 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRefMut<'a, A, T> {
 impl<'a, A: allocator::Allocator<T>, T> DerefMut for GuardRefMut<'a, A, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         if self.is_valid() {
-            self.ptr.as_mut()
+            unsafe { &mut *self.ptr }
         } else {
             panic!("Failed to deref_mut GuardRefMut: invalid generation");
+        }
+    }
+}
+
+impl<A: allocator::Allocator<T>, T> Drop for GuardRefMut<'_, A, T> {
+    fn drop(&mut self) {
+        if self.is_valid() {
+            if self.access_rights.get().contains(AccessRights::Write) || self.access_rights.get().contains(AccessRights::Read) {
+                let new_access = self.access_rights.get().remove(AccessRights::ReadWrite);
+                let _ = self.mem.set_access(new_access);
+            }
         }
     }
 }

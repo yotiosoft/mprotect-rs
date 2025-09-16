@@ -32,8 +32,8 @@ pub struct GuardedProtectedMemory<A: allocator::Allocator<T>, T> {
 }
 
 impl<A: allocator::Allocator<T>, T> GuardedProtectedMemory<A, T> {
-    pub fn new(mut memory: UnsafeProtectedRegion<A, T>, new_access_rights: AccessRights) -> Result<Self, MprotectError> {
-        let original_access_rights = memory.region_access_rights();
+    pub fn new(memory: UnsafeProtectedRegion<A, T>, default_access_rights: AccessRights, new_access_rights: AccessRights) -> Result<Self, MprotectError> {
+        let original_access_rights = default_access_rights;
         memory.set_access(new_access_rights)?;
         Ok(
             GuardedProtectedMemory {
@@ -45,10 +45,6 @@ impl<A: allocator::Allocator<T>, T> GuardedProtectedMemory<A, T> {
 
     pub fn as_mut(&mut self) -> &mut T {
         self.memory.as_mut()
-    }
-
-    pub fn region_access_rights(&self) -> AccessRights {
-        self.memory.region_access_rights()
     }
 }
 

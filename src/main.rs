@@ -161,7 +161,7 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
 }
 
 fn child_regionguard_workloads() -> Result<(), RuntimeError> {
-    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessRights::ReadWrite).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessRights::Read).map_err(RuntimeError::MprotectError)?;
 
     {
         println!("\tCreated RegionGuard with ReadWrite access (should succeed)");
@@ -183,15 +183,12 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
         //*write_guard = 84;  // This line should cause compile-time error
     }
 
-    println!("\tChanging access rights to ReadOnly");
-    safe_mem.set_access(AccessRights::Read).map_err(RuntimeError::MprotectError)?;
-
     {
         println!("\tAttempt to read the value (should succeed)");
         let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
         println!("\t\tRead value: {}", *read_guard);
 
-        println!("\tAttempt to write the value 84 (should fail)");
+        println!("\tAttempt to write the value 84 (should succeed)");
         let mut write_guard = safe_mem.write().map_err(RuntimeError::GuardError)?;
         *write_guard = 84;
         println!("\t\tWrote value: {}", *write_guard);
@@ -262,7 +259,7 @@ fn main() -> Result<(), RuntimeError> {
     } else if args.len() > 1 && args[1] == "--regionguard" {
         println!("Child process started with PID {}", std::process::id());
         child_regionguard_workloads()?;      // This function handles its own errors and panics
-        println!("Child process finished without segmentation fault");
+        println!("Child process finished successfully");
     } else {
         parent_main();
     }

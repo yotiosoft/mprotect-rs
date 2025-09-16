@@ -28,6 +28,7 @@ impl std::fmt::Display for ProtectedMemoryError {
 pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
     memory: UnsafeProtectedRegion<A, T>,
     pkey: Option<PKey>,
+    access_rights: AccessRights,  // Cached access rights
 }
 
 /// Implementation of ProtectedMemory methods.
@@ -42,7 +43,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
         let memory = UnsafeProtectedRegion::new(access_rights)?;
-        Ok(Self { memory, pkey: None })
+        Ok(Self { memory, pkey: None , access_rights })
     }
 
     /// Creates a new `ProtectedMemory` instance associated with the specified pkey.
@@ -57,7 +58,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
         let mut memory = UnsafeProtectedRegion::new(access_rights)?;
         memory.set_pkey(access_rights, pkey)?;
-        Ok(Self { memory, pkey: Some(pkey.clone()) })
+        Ok(Self { memory, pkey: Some(pkey.clone()), access_rights })
     }
 
     /// Changes the access rights of the memory region.
@@ -86,7 +87,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// # Returns
     /// - The current access rights of the memory region.
     pub fn region_access_rights(&self) -> AccessRights {
-        self.memory.region_access_rights()
+        self.access_rights
     }
 
     /// Attempts to read from the protected memory region.

@@ -49,6 +49,150 @@ impl AccessRights {
             AccessRights::ReadWriteExec => *self == AccessRights::ReadWriteExec,
         }
     }
+
+    /// Add the specified access right to the current access rights.
+    /// # Arguments
+    /// - `right`: The access right to add.
+    /// # Returns
+    /// - The new access rights with the specified access right added.
+    pub fn add(&self, right: AccessRights) -> AccessRights {
+        match right {
+            AccessRights::None => *self,
+            AccessRights::Read => match self {
+                AccessRights::None => AccessRights::Read,
+                AccessRights::Read => AccessRights::Read,
+                AccessRights::Write => AccessRights::ReadWrite,
+                AccessRights::Exec => AccessRights::ReadExec,
+                AccessRights::ReadWrite => AccessRights::ReadWrite,
+                AccessRights::ReadExec => AccessRights::ReadExec,
+                AccessRights::WriteExec => AccessRights::ReadWriteExec,
+                AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+            },
+            AccessRights::Write => match self {
+                AccessRights::None => AccessRights::Write,
+                AccessRights::Read => AccessRights::ReadWrite,
+                AccessRights::Write => AccessRights::Write,
+                AccessRights::Exec => AccessRights::WriteExec,
+                AccessRights::ReadWrite => AccessRights::ReadWrite,
+                AccessRights::ReadExec => AccessRights::ReadWriteExec,
+                AccessRights::WriteExec => AccessRights::WriteExec,
+                AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+            },
+            AccessRights::Exec => match self {
+                AccessRights::None => AccessRights::Exec,
+                AccessRights::Read => AccessRights::ReadExec,
+                AccessRights::Write => AccessRights::WriteExec,
+                AccessRights::Exec => AccessRights::Exec,
+                AccessRights::ReadWrite => AccessRights::ReadWriteExec,
+                AccessRights::ReadExec => AccessRights::ReadExec,
+                AccessRights::WriteExec => AccessRights::ReadWriteExec,
+                AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+            },
+            AccessRights::ReadWrite => match self {
+                AccessRights::None => AccessRights::ReadWrite,
+                AccessRights::Read => AccessRights::ReadWrite,
+                AccessRights::Write => AccessRights::ReadWrite,
+                AccessRights::Exec => AccessRights::ReadWriteExec,
+                AccessRights::ReadWrite => AccessRights::ReadWrite,
+                AccessRights::ReadExec => AccessRights::ReadWriteExec,
+                AccessRights::WriteExec => AccessRights::ReadWriteExec,
+                AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+            },
+            AccessRights::ReadExec => match self {
+                AccessRights::None => AccessRights::ReadExec,
+                AccessRights::Read => AccessRights::ReadExec,
+                AccessRights::Write => AccessRights::ReadWriteExec,
+                AccessRights::Exec => AccessRights::ReadExec,
+                AccessRights::ReadWrite => AccessRights::ReadWriteExec,
+                AccessRights::ReadExec => AccessRights::ReadExec,
+                AccessRights::WriteExec => AccessRights::ReadWriteExec,
+                AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+            },
+            AccessRights::WriteExec => match self {
+                AccessRights::None => AccessRights::WriteExec,
+                AccessRights::Read => AccessRights::ReadWriteExec,
+                AccessRights::Write => AccessRights::WriteExec,
+                AccessRights::Exec => AccessRights::WriteExec,
+                AccessRights::ReadWrite => AccessRights::ReadWriteExec,
+                AccessRights::ReadExec => AccessRights::ReadWriteExec,
+                AccessRights::WriteExec => AccessRights::WriteExec,
+                AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+            },
+            AccessRights::ReadWriteExec => AccessRights::ReadWriteExec,
+        }
+    }
+
+    /// Removes the specified access right from the current access rights.
+    /// # Arguments
+    /// - `right`: The access right to remove.
+    /// # Returns
+    /// - The new access rights with the specified access right deleted.
+    pub fn remove(&self, right: AccessRights) -> AccessRights {
+        match right {
+            AccessRights::None => *self,
+            AccessRights::Read => match self {
+                AccessRights::None => AccessRights::None,
+                AccessRights::Read => AccessRights::None,
+                AccessRights::Write => AccessRights::Write,
+                AccessRights::Exec => AccessRights::Exec,
+                AccessRights::ReadWrite => AccessRights::Write,
+                AccessRights::ReadExec => AccessRights::Exec,
+                AccessRights::WriteExec => AccessRights::WriteExec,
+                AccessRights::ReadWriteExec => AccessRights::WriteExec,
+            },
+            AccessRights::Write => match self {
+                AccessRights::None => AccessRights::None,
+                AccessRights::Read => AccessRights::Read,
+                AccessRights::Write => AccessRights::None,
+                AccessRights::Exec => AccessRights::Exec,
+                AccessRights::ReadWrite => AccessRights::Read,
+                AccessRights::ReadExec => AccessRights::ReadExec,
+                AccessRights::WriteExec => AccessRights::Exec,
+                AccessRights::ReadWriteExec => AccessRights::ReadExec,
+            },
+            AccessRights::Exec => match self {
+                AccessRights::None => AccessRights::None,
+                AccessRights::Read => AccessRights::Read,
+                AccessRights::Write => AccessRights::Write,
+                AccessRights::Exec => AccessRights::None,
+                AccessRights::ReadWrite => AccessRights::ReadWrite,
+                AccessRights::ReadExec => AccessRights::Read,
+                AccessRights::WriteExec => AccessRights::Write,
+                AccessRights::ReadWriteExec => AccessRights::ReadWrite,
+            },
+            AccessRights::ReadWrite => match self {
+                AccessRights::None => AccessRights::None,
+                AccessRights::Read => AccessRights::None,
+                AccessRights::Write => AccessRights::None,
+                AccessRights::Exec => AccessRights::Exec,
+                AccessRights::ReadWrite => AccessRights::None,
+                AccessRights::ReadExec => AccessRights::Exec,
+                AccessRights::WriteExec => AccessRights::WriteExec,
+                AccessRights::ReadWriteExec => AccessRights::WriteExec,
+            },
+            AccessRights::ReadExec => match self {
+                AccessRights::None => AccessRights::None,
+                AccessRights::Read => AccessRights::None,
+                AccessRights::Write => AccessRights::Write,
+                AccessRights::Exec => AccessRights::None,
+                AccessRights::ReadWrite => AccessRights::Write,
+                AccessRights::ReadExec => AccessRights::None,
+                AccessRights::WriteExec => AccessRights::Write,
+                AccessRights::ReadWriteExec => AccessRights::Write,
+            },
+            AccessRights::WriteExec => match self {
+                AccessRights::None => AccessRights::None,
+                AccessRights::Read => AccessRights::Read,
+                AccessRights::Write => AccessRights::None,
+                AccessRights::Exec => AccessRights::None,
+                AccessRights::ReadWrite => AccessRights::Read,
+                AccessRights::ReadExec => AccessRights::Read,
+                AccessRights::WriteExec => AccessRights::None,
+                AccessRights::ReadWriteExec => AccessRights::Read,
+            },
+            AccessRights::ReadWriteExec => AccessRights::None,
+        }
+    }
 }
 
 /// A memory region that is protected with mprotect/pkey_mprotect.
@@ -74,7 +218,6 @@ pub struct UnsafeProtectedRegion<A: allocator::Allocator<T>, T> {
     len: usize,
     pkey_id: Option<u32>,
     allocator: allocator::MemoryRegion<A, T>,
-    region_access_rights: AccessRights,
 }
 
 /// Implementation of methods for `UnsafeProtectedRegion`.
@@ -98,7 +241,6 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
             len: std::mem::size_of::<T>(),
             pkey_id: None,
             allocator,
-            region_access_rights: access_rights,
         })
     }
 
@@ -110,7 +252,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights.
     /// - `Err(MprotectError)`: If the `mprotect` system call fails
-    pub fn set_access(&mut self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+    pub fn set_access(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         let ret = unsafe {
             libc::mprotect(
                 self.ptr.as_ptr() as *mut libc::c_void,
@@ -122,7 +264,6 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
             return Err(super::MprotectError::MprotectFailed(err_no));
         }
-        self.region_access_rights = access_rights;
         Ok(())
     }
 
@@ -196,13 +337,6 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// 
     pub fn pkey(&self) -> Option<u32> {
         self.pkey_id
-    }
-
-    /// Returns the current access rights of the memory region.
-    /// # Returns
-    /// - The current access rights of the memory region.
-    pub fn region_access_rights(&self) -> AccessRights {
-        self.region_access_rights
     }
 
     /// Returns a mutable reference to the data stored in the memory region.
