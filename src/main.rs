@@ -7,6 +7,7 @@ use std::os::unix::process::ExitStatusExt;
 enum RuntimeError {
     MprotectError(MprotectError),
     ProtectedMemoryError(ProtectedMemoryError),
+    GuardError(GuardError),
     UnexpectedSuccess,  // For cases where we expect a failure but got success
 }
 impl std::fmt::Display for RuntimeError {
@@ -14,6 +15,7 @@ impl std::fmt::Display for RuntimeError {
         match self {
             RuntimeError::MprotectError(e) => write!(f, "MprotectError: {}", e),
             RuntimeError::ProtectedMemoryError(e) => write!(f, "ProtectedMemoryError: {}", e),
+            RuntimeError::GuardError(e) => write!(f, "GuardError: {}", e),
             RuntimeError::UnexpectedSuccess => write!(f, "Operation succeeded unexpectedly"),
         }
     }
@@ -158,6 +160,46 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
     Err(RuntimeError::UnexpectedSuccess)
 }
 
+fn child_regionguard_workloads() -> Result<(), RuntimeError> {
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessRights::ReadWrite).map_err(RuntimeError::MprotectError)?;
+
+    {
+        println!("\tCreated RegionGuard with ReadWrite access (should succeed)");
+        let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
+        println!("\t\tRead value: {}", *read_guard);
+
+        println!("\tAttempt to write the value 42 (should succeed)");
+        let mut write_guard = safe_mem.write().map_err(RuntimeError::GuardError)?;
+        *write_guard = 42;
+        println!("\t\tWrote value: {}", *write_guard);
+
+        println!("\tAttempt to read the value again (should succeed)");
+        let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
+        println!("\t\tRead value: {}", *read_guard);
+
+        // At below, we reuse the previous write_guard after invalidation.
+        // This will cause compile-time error because it is also borrowed as mutable before.
+        //println!("\tReuse previous write_guard after invalidation (should fail at compile time)");
+        //*write_guard = 84;  // This line should cause compile-time error
+    }
+
+    println!("\tChanging access rights to ReadOnly");
+    safe_mem.set_access(AccessRights::Read).map_err(RuntimeError::MprotectError)?;
+
+    {
+        println!("\tAttempt to read the value (should succeed)");
+        let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
+        println!("\t\tRead value: {}", *read_guard);
+
+        println!("\tAttempt to write the value 84 (should fail)");
+        let mut write_guard = safe_mem.write().map_err(RuntimeError::GuardError)?;
+        *write_guard = 84;
+        println!("\t\tWrote value: {}", *write_guard);
+    }
+
+    Ok(())
+}
+
 fn handle_child_exit(flag: String) {
     // Do workloads in a child process
     let status = Command::new(std::env::current_exe().unwrap())
@@ -197,6 +239,9 @@ fn parent_main() {
     println!("--- Testing Safe Guarded Pkey Workloads ---");
     handle_child_exit("--safe-guarded-pkey".to_string());
 
+    println!("--- Testing RegionGuard Workloads ---");
+    handle_child_exit("--regionguard".to_string());
+
     println!("Parent process finished");
 }
 
@@ -213,6 +258,10 @@ fn main() -> Result<(), RuntimeError> {
     } else if args.len() > 1 && args[1] == "--safe-guarded-pkey" {
         println!("Child process started with PID {}", std::process::id());
         child_safe_guarded_pkey()?;      // This function handles its own errors and panics on failure
+        println!("Child process finished without segmentation fault");
+    } else if args.len() > 1 && args[1] == "--regionguard" {
+        println!("Child process started with PID {}", std::process::id());
+        child_regionguard_workloads()?;      // This function handles its own errors and panics
         println!("Child process finished without segmentation fault");
     } else {
         parent_main();

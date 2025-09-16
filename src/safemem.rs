@@ -66,7 +66,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// # Returns
     /// - `Ok(())`: If the operation succeeds.
     /// - `Err(MprotectError)`: An error if the operation fails.
-    pub fn mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+    pub fn mprotect(&mut self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         self.memory.set_access(access_rights)
     }
 

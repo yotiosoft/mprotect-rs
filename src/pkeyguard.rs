@@ -17,6 +17,4 @@ impl PkeyGuard {
             }
         )
     }
-
-    pub fn associate(&self, )
 }

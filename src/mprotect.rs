@@ -30,6 +30,27 @@ pub enum AccessRights {
     ReadWriteExec = libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC,
 }
 
+impl AccessRights {
+    /// Checks if the current access rights contain the specified access right.
+    /// # Arguments
+    /// - `right`: The access right to check for.
+    /// # Returns
+    /// - `true`: If the current access rights contain the specified access right.
+    /// - `false`: Otherwise.
+    pub fn contains(&self, right: AccessRights) -> bool {
+        match right {
+            AccessRights::None => *self == AccessRights::None,
+            AccessRights::Read => matches!(self, AccessRights::Read | AccessRights::ReadWrite | AccessRights::ReadExec | AccessRights::ReadWriteExec),
+            AccessRights::Write => matches!(self, AccessRights::Write | AccessRights::ReadWrite | AccessRights::WriteExec | AccessRights::ReadWriteExec),
+            AccessRights::Exec => matches!(self, AccessRights::Exec | AccessRights::ReadExec | AccessRights::WriteExec | AccessRights::ReadWriteExec),
+            AccessRights::ReadWrite => matches!(self, AccessRights::ReadWrite | AccessRights::ReadWriteExec),
+            AccessRights::ReadExec => matches!(self, AccessRights::ReadExec | AccessRights::ReadWriteExec),
+            AccessRights::WriteExec => matches!(self, AccessRights::WriteExec | AccessRights::ReadWriteExec),
+            AccessRights::ReadWriteExec => *self == AccessRights::ReadWriteExec,
+        }
+    }
+}
+
 /// A memory region that is protected with mprotect/pkey_mprotect.
 /// It uses a specified allocator to allocate and deallocate memory.
 /// The memory region can optionally be associated with a protection key (pkey).
@@ -89,7 +110,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights.
     /// - `Err(MprotectError)`: If the `mprotect` system call fails
-    pub fn set_access(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+    pub fn set_access(&mut self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         let ret = unsafe {
             libc::mprotect(
                 self.ptr.as_ptr() as *mut libc::c_void,
@@ -101,6 +122,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
             return Err(super::MprotectError::MprotectFailed(err_no));
         }
+        self.region_access_rights = access_rights;
         Ok(())
     }
 
