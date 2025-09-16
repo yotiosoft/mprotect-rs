@@ -3,35 +3,40 @@ pub use crate::pkey::*;
 
 use std::ops::{Deref, DerefMut};
 
+/// Error type for ProtectedMemory operations.
+/// Indicates access violations when attempting to read or write protected memory.
+/// - ReadAccessViolation: Attempted to read from a memory region without read access.
+/// - WriteAccessViolation: Attempted to write to a memory region without write access.
+/// - ExecuteAccessViolation: Attempted to execute code in a memory region without execute access.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SafeProtectedMemoryError {
+pub enum ProtectedMemoryError {
     ReadAccessViolation,
     WriteAccessViolation,
     ExecuteAccessViolation,
 }
-impl std::fmt::Display for SafeProtectedMemoryError {
+impl std::fmt::Display for ProtectedMemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SafeProtectedMemoryError::ReadAccessViolation => write!(f, "read access violation"),
-            SafeProtectedMemoryError::WriteAccessViolation => write!(f, "write access violation"),
-            SafeProtectedMemoryError::ExecuteAccessViolation => write!(f, "execute access violation"),
+            ProtectedMemoryError::ReadAccessViolation => write!(f, "read access violation"),
+            ProtectedMemoryError::WriteAccessViolation => write!(f, "write access violation"),
+            ProtectedMemoryError::ExecuteAccessViolation => write!(f, "execute access violation"),
         }
     }
 }
 
-pub struct SafeProtectedMemory<A: allocator::Allocator<T>, T> {
-    memory: UnsafeProtectedMemory<A, T>,
+pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
+    memory: UnProtectedMemory<A, T>,
     pkey: Option<PKey>,
 }
 
-impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
+impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let memory = UnsafeProtectedMemory::without_pkey(access_rights)?;
+        let memory = UnProtectedMemory::without_pkey(access_rights)?;
         Ok(Self { memory, pkey: None })
     }
 
     pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
-        let memory = UnsafeProtectedMemory::with_pkey(access_rights, pkey)?;
+        let memory = UnProtectedMemory::with_pkey(access_rights, pkey)?;
         Ok(Self { memory, pkey: Some(pkey.clone()) })
     }
 
@@ -51,16 +56,16 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
         self.memory.region_access_rights()
     }
 
-    pub fn read(&self) -> Result<ProtectedGuard<'_, A, T>, super::SafeProtectedMemoryError> {
+    pub fn read(&self) -> Result<ProtectedGuard<'_, A, T>, super::ProtectedMemoryError> {
         if !self.can_read() {
-            return Err(super::SafeProtectedMemoryError::ReadAccessViolation);
+            return Err(super::ProtectedMemoryError::ReadAccessViolation);
         }
         Ok(ProtectedGuard { memory: self })
     }
 
-    pub fn write(&mut self) -> Result<ProtectedGuardMut<'_, A, T>, super::SafeProtectedMemoryError> {
+    pub fn write(&mut self) -> Result<ProtectedGuardMut<'_, A, T>, super::ProtectedMemoryError> {
         if !self.can_write() {
-            return Err(super::SafeProtectedMemoryError::WriteAccessViolation);
+            return Err(super::ProtectedMemoryError::WriteAccessViolation);
         }
         Ok(ProtectedGuardMut { memory: self })
     }
@@ -97,7 +102,7 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
 }
 
 pub struct ProtectedGuard<'a, A: allocator::Allocator<T>, T> {
-    memory: &'a SafeProtectedMemory<A, T>,
+    memory: &'a ProtectedMemory<A, T>,
 }
 
 impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuard<'a, A, T> {
@@ -110,7 +115,7 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuard<'a, A, T> {
 }
 
 pub struct ProtectedGuardMut<'a, A: allocator::Allocator<T>, T> {
-    memory: &'a mut SafeProtectedMemory<A, T>,
+    memory: &'a mut ProtectedMemory<A, T>,
 }
 
 impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuardMut<'a, A, T> {

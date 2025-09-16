@@ -27,12 +27,12 @@ impl Drop for GuardedPKey {
 }
 
 pub struct GuardedProtectedMemory<A: allocator::Allocator<T>, T> {
-    memory: UnsafeProtectedMemory<A, T>,
+    memory: UnProtectedMemory<A, T>,
     original_access_rights: AccessRights,
 }
 
 impl<A: allocator::Allocator<T>, T> GuardedProtectedMemory<A, T> {
-    pub fn new(memory: UnsafeProtectedMemory<A, T>, new_access_rights: AccessRights) -> Result<Self, MprotectError> {
+    pub fn new(memory: UnProtectedMemory<A, T>, new_access_rights: AccessRights) -> Result<Self, MprotectError> {
         let original_access_rights = memory.region_access_rights();
         memory.mprotect(new_access_rights)?;
         Ok(

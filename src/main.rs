@@ -6,14 +6,14 @@ use std::os::unix::process::ExitStatusExt;
 #[derive(Debug)]
 enum RuntimeError {
     MprotectError(MprotectError),
-    SafeProtectedMemoryError(SafeProtectedMemoryError),
+    ProtectedMemoryError(ProtectedMemoryError),
     UnexpectedSuccess,  // For cases where we expect a failure but got success
 }
 impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RuntimeError::MprotectError(e) => write!(f, "MprotectError: {}", e),
-            RuntimeError::SafeProtectedMemoryError(e) => write!(f, "SafeProtectedMemoryError: {}", e),
+            RuntimeError::ProtectedMemoryError(e) => write!(f, "ProtectedMemoryError: {}", e),
             RuntimeError::UnexpectedSuccess => write!(f, "Operation succeeded unexpectedly"),
         }
     }
@@ -21,7 +21,7 @@ impl std::fmt::Display for RuntimeError {
 
 fn child_pkey_workloads() -> Result<(), RuntimeError> {
     let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-    let mut protected_mem = UnsafeProtectedMemory::<allocator::Mmap, u32>::with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
+    let mut protected_mem = UnProtectedMemory::<allocator::Mmap, u32>::with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
 
     //let mut protected_mem = ProtectedMemory::<u32>::without_pkey(AccessRights::Read)?;
 
@@ -45,7 +45,7 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     println!("\tAttempt to create another pkey and allocate memory with it");
     let pkey2 = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
     println!("\t\tCreated another pkey {}", pkey2.key());
-    let mut new_memory = UnsafeProtectedMemory::<allocator::Jmalloc, u32>::with_pkey(AccessRights::ReadWrite, &pkey2).map_err(RuntimeError::MprotectError)?;
+    let mut new_memory = UnProtectedMemory::<allocator::Jmalloc, u32>::with_pkey(AccessRights::ReadWrite, &pkey2).map_err(RuntimeError::MprotectError)?;
     println!("\tSet the value in pkey {} memory to 100", pkey2.key());
     *new_memory.as_mut() = 100;
     println!("\t\tValue in new memory: {}", *new_memory.as_ref());
@@ -84,16 +84,16 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
 fn child_safe_protected_memory() -> Result<(), RuntimeError> {
     let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-    let mut safe_mem = SafeProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = ProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
 
     // Write to the protected memory
     println!("\tAttempt to write the value 42");
     {
-        let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
+        let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
         *guard = 42;
     }
     {
-        let guard = safe_mem.read().map_err(RuntimeError::SafeProtectedMemoryError)?;
+        let guard = safe_mem.read().map_err(RuntimeError::ProtectedMemoryError)?;
         println!("\tValue written: {}", *guard);
     }
     println!("\t\tWriting succeeded");
@@ -106,13 +106,13 @@ fn child_safe_protected_memory() -> Result<(), RuntimeError> {
     // Write to the protected memory (should fail)
     println!("\tAttempt to read the value");
     {
-        let guard = safe_mem.read().map_err(RuntimeError::SafeProtectedMemoryError)?;
+        let guard = safe_mem.read().map_err(RuntimeError::ProtectedMemoryError)?;
         println!("\tValue read: {}", *guard);
     }
     println!("\t\tReading succeeded");
     println!("\tAttempt to write the value 84 (this should fail)");
     {
-        let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
+        let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
         *guard = 84;
     }
     println!("\t\tWriting succeeded (this is unexpected!)");
@@ -122,14 +122,14 @@ fn child_safe_protected_memory() -> Result<(), RuntimeError> {
 
 fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
     let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-    let mut safe_mem = SafeProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = ProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
 
     {
         println!("\tCreating GuardedPKey to set pkey to DisableWrite");
         let _guarded_pkey = GuardedPKey::new(&pkey, PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
         println!("\tAttempt to read the value (should succeed)");
         {
-            let guard = safe_mem.read().map_err(RuntimeError::SafeProtectedMemoryError)?;
+            let guard = safe_mem.read().map_err(RuntimeError::ProtectedMemoryError)?;
             println!("\t\tValue read: {}", *guard);
         }
 
@@ -138,7 +138,7 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
             let _inner_guarded_pkey = GuardedPKey::new(&pkey, PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
             println!("\tAttempt to write the value 84 (should succeed)");
             {
-                let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
+                let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
                 *guard = 84;
                 println!("\t\tValue written: {}", *guard);
             }
@@ -147,7 +147,7 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
         println!("\tOut of inner GuardedPKey scope, pkey should be back to DisableWrite");
         println!("\tAttempt to write the value 168 (should fail)");
         {
-            let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
+            let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
             *guard = 168;
             println!("\tValue written: {}", *guard);
         }
