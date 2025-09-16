@@ -2,17 +2,17 @@ pub use crate::mprotect::*;
 pub use crate::safemem::*;
 pub use crate::MprotectError;
 
-pub struct GuardedProtectionKey {
-    pkey: ProtectionKey,
+pub struct GuardedPKey {
+    pkey: PKey,
     original_access_rights: PkeyAccessRights,
 }
 
-impl GuardedProtectionKey {
-    pub fn new(pkey: &ProtectionKey, new_access_rights: PkeyAccessRights) -> Result<Self, MprotectError> {
+impl GuardedPKey {
+    pub fn new(pkey: &PKey, new_access_rights: PkeyAccessRights) -> Result<Self, MprotectError> {
         let original_access_rights = pkey.get_access_rights();
         pkey.set_access_rights(new_access_rights)?;
         Ok(
-            GuardedProtectionKey {
+            GuardedPKey {
                 pkey: pkey.clone(),
                 original_access_rights,
             }
@@ -20,19 +20,19 @@ impl GuardedProtectionKey {
     }
 }
 
-impl Drop for GuardedProtectionKey {
+impl Drop for GuardedPKey {
     fn drop(&mut self) {
         let _ = self.pkey.set_access_rights(self.original_access_rights);
     }
 }
 
 pub struct GuardedProtectedMemory<A: allocator::Allocator<T>, T> {
-    memory: ProtectedMemory<A, T>,
+    memory: UnsafeProtectedMemory<A, T>,
     original_access_rights: AccessRights,
 }
 
 impl<A: allocator::Allocator<T>, T> GuardedProtectedMemory<A, T> {
-    pub fn new(memory: ProtectedMemory<A, T>, new_access_rights: AccessRights) -> Result<Self, MprotectError> {
+    pub fn new(memory: UnsafeProtectedMemory<A, T>, new_access_rights: AccessRights) -> Result<Self, MprotectError> {
         let original_access_rights = memory.region_access_rights();
         memory.mprotect(new_access_rights)?;
         Ok(

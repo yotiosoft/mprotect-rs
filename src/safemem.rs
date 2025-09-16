@@ -20,18 +20,18 @@ impl std::fmt::Display for SafeProtectedMemoryError {
 }
 
 pub struct SafeProtectedMemory<A: allocator::Allocator<T>, T> {
-    memory: ProtectedMemory<A, T>,
-    pkey: Option<ProtectionKey>,
+    memory: UnsafeProtectedMemory<A, T>,
+    pkey: Option<PKey>,
 }
 
 impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
     pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let memory = ProtectedMemory::without_pkey(access_rights)?;
+        let memory = UnsafeProtectedMemory::without_pkey(access_rights)?;
         Ok(Self { memory, pkey: None })
     }
 
-    pub fn new_with_pkey(access_rights: AccessRights, pkey: &ProtectionKey) -> Result<Self, super::MprotectError> {
-        let memory = ProtectedMemory::with_pkey(access_rights, pkey)?;
+    pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
+        let memory = UnsafeProtectedMemory::with_pkey(access_rights, pkey)?;
         Ok(Self { memory, pkey: Some(pkey.clone()) })
     }
 
@@ -43,7 +43,7 @@ impl<A: allocator::Allocator<T>, T> SafeProtectedMemory<A, T> {
         self.memory.as_mut()
     }
 
-    pub fn pkey(&self) -> Option<&ProtectionKey> {
+    pub fn pkey(&self) -> Option<&PKey> {
         self.pkey.as_ref()
     }
 

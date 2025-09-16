@@ -1,7 +1,7 @@
 use core::panic;
 
 use libc;
-use super::ProtectionKey;
+use super::PKey;
 
 use std::ptr::NonNull;
 
@@ -33,8 +33,12 @@ pub enum AccessRights {
 /// A memory region that is protected with mprotect/pkey_mprotect.
 /// It uses a specified allocator to allocate and deallocate memory.
 /// The memory region can optionally be associated with a protection key (pkey).
-/// The memory region is automatically deallocated when the `ProtectedMemory`
+/// The memory region is automatically deallocated when the `UnsafeProtectedMemory`
 /// instance is dropped.
+/// `UnsafeProtectedMemory` provides low-level access to the memory region
+/// and does not enforce access rights at the Rust type system level.
+/// Users must ensure that they respect the access rights set for the memory region.
+/// If access rights are violated, it may lead to cause a segmentation fault by the OS.
 /// # Type Parameters
 /// - `A`: The allocator type that implements the `Allocator<T>` trait.
 /// - `T`: The type of data to be stored in the memory region.
@@ -44,7 +48,7 @@ pub enum AccessRights {
 /// - `pkey_id`: An optional protection key ID associated with the memory region.
 /// - `allocator`: The allocator instance used to manage the memory region.
 /// - `region_access_rights`: The current access rights of the memory region.
-pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
+pub struct UnsafeProtectedMemory<A: allocator::Allocator<T>, T> {
     ptr: NonNull<T>,
     len: usize,
     pkey_id: Option<u32>,
@@ -52,14 +56,14 @@ pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
     region_access_rights: AccessRights,
 }
 
-/// Implementation of methods for `ProtectedMemory`.
-impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
+/// Implementation of methods for `UnsafeProtectedMemory`.
+impl<A: allocator::Allocator<T>, T> UnsafeProtectedMemory<A, T> {
     /// Allocates a new memory region without associating it with a protection key.
     /// The memory region is allocated with the specified access rights.
     /// # Arguments
     /// - `access_rights`: The access rights to be set for the memory region.
     /// # Returns
-    /// - `Ok(ProtectedMemory)`: On successful allocation.
+    /// - `Ok(UnsafeProtectedMemory)`: On successful allocation.
     /// - `Err(MprotectError)`: If memory allocation fails.
     pub fn without_pkey(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
@@ -81,12 +85,12 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// The memory region is allocated with the specified access rights.
     /// # Arguments
     /// - `access_rights`: The access rights to be set for the memory region.
-    /// - `pkey`: A reference to the `ProtectionKey` to be associated with
+    /// - `pkey`: A reference to the `PKey` to be associated with
     /// the memory region.
     /// # Returns
-    /// - `Ok(ProtectedMemory)`: On successful allocation and association.
+    /// - `Ok(UnsafeProtectedMemory)`: On successful allocation and association.
     /// - `Err(MprotectError)`: If memory allocation or pkey association fails.         
-    pub fn with_pkey(access_rights: AccessRights, pkey: &ProtectionKey) -> Result<Self, super::MprotectError> {
+    pub fn with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
@@ -139,7 +143,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// # Arguments
     /// - `access_rights`: The new access rights to be set for the memory region
     /// using `pkey_mprotect`.
-    /// - `pkey`: A reference to the `ProtectionKey` to be associated with
+    /// - `pkey`: A reference to the `PKey` to be associated with
     /// the memory region.
     /// # Returns
     /// - `Ok(())`: On successful change of access rights and association.
@@ -171,15 +175,15 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// # Arguments
     /// - `access_rights`: The new access rights to be set for the memory region
     /// using `pkey_mprotect`.
-    /// - `pkey`: A reference to the `ProtectionKey` to be associated with
+    /// - `pkey`: A reference to the `PKey` to be associated with
     /// the memory region.
     /// # Returns
     /// - `Ok(())`: On successful change of access rights and association.
     /// - `Err(MprotectError)`: If the `pkey_mprotect` system call fails
     /// or if no protection key is associated with the memory region.
-    /// This method updates the internal state of the `ProtectedMemory`
+    /// This method updates the internal state of the `UnsafeProtectedMemory`
     /// instance to reflect the new protection key association.
-    pub fn pkey_mprotect(&mut self, access_rights: AccessRights, pkey: &ProtectionKey) -> Result<(), super::MprotectError> {
+    pub fn pkey_mprotect(&mut self, access_rights: AccessRights, pkey: &PKey) -> Result<(), super::MprotectError> {
         self.pkey_id = Some(pkey.key());
         Self::impl_pkey_mprotect(access_rights, self.ptr.as_ptr() as *mut libc::c_void, self.len, self.pkey_id)
     }
@@ -228,8 +232,8 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     }
 }
 
-impl<A: allocator::Allocator<T>, T> Drop for ProtectedMemory<A, T> {
-    /// Automatically deallocates the memory region when the `ProtectedMemory`
+impl<A: allocator::Allocator<T>, T> Drop for UnsafeProtectedMemory<A, T> {
+    /// Automatically deallocates the memory region when the `UnsafeProtectedMemory`
     /// instance is dropped. If deallocation fails, it panics with an error message.
     fn drop(&mut self) {
         let ret = self.allocator.deallocate();
