@@ -10,6 +10,12 @@ pub use safemem::*;
 mod safeguard;
 pub use safeguard::*;
 
+mod pkeyguard;
+pub use pkeyguard::*;
+
+mod regionguard;
+pub use regionguard::*;
+
 pub type Errno = i32;
 
 use std::fmt::Display;

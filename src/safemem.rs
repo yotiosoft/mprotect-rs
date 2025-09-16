@@ -26,7 +26,7 @@ impl std::fmt::Display for ProtectedMemoryError {
 /// The memory region can be accessed through guarded read and write methods that enforce the access rights.
 /// The memory region is automatically deallocated when the `ProtectedMemory` instance is dropped.
 pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
-    memory: UnsafeProtectedMemory<A, T>,
+    memory: UnsafeProtectedRegion<A, T>,
     pkey: Option<PKey>,
 }
 
@@ -41,7 +41,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// succeeds.
     /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let memory = UnsafeProtectedMemory::without_pkey(access_rights)?;
+        let memory = UnsafeProtectedRegion::new(access_rights)?;
         Ok(Self { memory, pkey: None })
     }
 
@@ -55,7 +55,8 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// succeeds.
     /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
-        let memory = UnsafeProtectedMemory::with_pkey(access_rights, pkey)?;
+        let mut memory = UnsafeProtectedRegion::new(access_rights)?;
+        memory.set_pkey(access_rights, pkey)?;
         Ok(Self { memory, pkey: Some(pkey.clone()) })
     }
 
@@ -66,7 +67,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// - `Ok(())`: If the operation succeeds.
     /// - `Err(MprotectError)`: An error if the operation fails.
     pub fn mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
-        self.memory.mprotect(access_rights)
+        self.memory.set_access(access_rights)
     }
 
     /// Returns a mutable reference to the underlying memory.
