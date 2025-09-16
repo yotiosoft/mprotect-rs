@@ -167,12 +167,16 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
         println!("\tCreated RegionGuard with ReadWrite access (should succeed)");
         let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
         println!("\t\tRead value: {}", *read_guard);
+    }
 
+    {
         println!("\tAttempt to write the value 42 (should succeed)");
         let mut write_guard = safe_mem.write().map_err(RuntimeError::GuardError)?;
         *write_guard = 42;
         println!("\t\tWrote value: {}", *write_guard);
+    }
 
+    {
         println!("\tAttempt to read the value again (should succeed)");
         let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
         println!("\t\tRead value: {}", *read_guard);
@@ -187,7 +191,9 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
         println!("\tAttempt to read the value (should succeed)");
         let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
         println!("\t\tRead value: {}", *read_guard);
+    }
 
+    {
         println!("\tAttempt to write the value 84 (should succeed)");
         let mut write_guard = safe_mem.write().map_err(RuntimeError::GuardError)?;
         *write_guard = 84;

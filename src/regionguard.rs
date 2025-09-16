@@ -3,7 +3,6 @@ use crate::{mprotect::*, MprotectError};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::ops::{Deref, DerefMut};
-
 pub struct RegionGuard<A: allocator::Allocator<T>, T> {
     memory: UnsafeProtectedRegion<A, T>,
     generation: Rc<Cell<u64>>,
@@ -107,6 +106,7 @@ impl<'a, A: allocator::Allocator<T>, T> Drop for GuardRef<'a, A, T> {
             if self.access_rights.get().contains(AccessRights::Read) {
                 let new_access = self.access_rights.get().remove(AccessRights::Read);
                 let _ = self.mem.set_access(new_access);
+                self.access_rights.set(new_access);
             }
         }
     }
@@ -153,6 +153,7 @@ impl<A: allocator::Allocator<T>, T> Drop for GuardRefMut<'_, A, T> {
             if self.access_rights.get().contains(AccessRights::Write) || self.access_rights.get().contains(AccessRights::Read) {
                 let new_access = self.access_rights.get().remove(AccessRights::ReadWrite);
                 let _ = self.mem.set_access(new_access);
+                self.access_rights.set(new_access);
             }
         }
     }
