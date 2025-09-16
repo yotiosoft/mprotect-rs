@@ -161,6 +161,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
 }
 
 /// A guard that provides safe read access to a `ProtectedMemory` instance.
+/// This guard ensures that the memory region can be read from based on the current access rights and pkey settings.
 pub struct ReadGuard<'a, A: allocator::Allocator<T>, T> {
     memory: &'a ProtectedMemory<A, T>,
 }
