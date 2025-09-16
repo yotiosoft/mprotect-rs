@@ -12,64 +12,119 @@ use std::ops::{Deref, DerefMut};
 pub enum ProtectedMemoryError {
     ReadAccessViolation,
     WriteAccessViolation,
-    ExecuteAccessViolation,
 }
 impl std::fmt::Display for ProtectedMemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ProtectedMemoryError::ReadAccessViolation => write!(f, "read access violation"),
             ProtectedMemoryError::WriteAccessViolation => write!(f, "write access violation"),
-            ProtectedMemoryError::ExecuteAccessViolation => write!(f, "execute access violation"),
         }
     }
 }
 
+/// A memory region that is protected with specific access rights and optionally associated with a protection key (pkey).
+/// The memory region can be accessed through guarded read and write methods that enforce the access rights.
+/// The memory region is automatically deallocated when the `ProtectedMemory` instance is dropped.
 pub struct ProtectedMemory<A: allocator::Allocator<T>, T> {
-    memory: UnProtectedMemory<A, T>,
+    memory: UnsafeProtectedMemory<A, T>,
     pkey: Option<PKey>,
 }
 
+/// Implementation of ProtectedMemory methods.
 impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
+    /// Creates a new `ProtectedMemory` instance without an associated pkey.
+    /// The memory region is allocated with the specified access rights.
+    /// # Arguments
+    /// - `access_rights`: The access rights for the memory region.
+    /// # Returns
+    /// - `Ok(ProtectedMemory)`: A new `ProtectedMemory` instance if allocation
+    /// succeeds.
+    /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let memory = UnProtectedMemory::without_pkey(access_rights)?;
+        let memory = UnsafeProtectedMemory::without_pkey(access_rights)?;
         Ok(Self { memory, pkey: None })
     }
 
+    /// Creates a new `ProtectedMemory` instance associated with the specified pkey.
+    /// The memory region is allocated with the specified access rights.
+    /// # Arguments
+    /// - `access_rights`: The access rights for the memory region.
+    /// - `pkey`: The protection key to associate with the memory region.
+    /// # Returns
+    /// - `Ok(ProtectedMemory)`: A new `ProtectedMemory` instance if allocation
+    /// succeeds.
+    /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
-        let memory = UnProtectedMemory::with_pkey(access_rights, pkey)?;
+        let memory = UnsafeProtectedMemory::with_pkey(access_rights, pkey)?;
         Ok(Self { memory, pkey: Some(pkey.clone()) })
     }
 
+    /// Changes the access rights of the memory region.
+    /// # Arguments
+    /// - `access_rights`: The new access rights for the memory region.
+    /// # Returns
+    /// - `Ok(())`: If the operation succeeds.
+    /// - `Err(MprotectError)`: An error if the operation fails.
     pub fn mprotect(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         self.memory.mprotect(access_rights)
     }
 
+    /// Returns a mutable reference to the underlying memory.
     pub fn as_mut(&mut self) -> &mut T {
         self.memory.as_mut()
     }
 
+    /// Returns a reference to the underlying memory.
+    /// If the memory is associated with a pkey, returns `Some(&PKey)`, otherwise returns `None`.
     pub fn pkey(&self) -> Option<&PKey> {
         self.pkey.as_ref()
     }
 
+    /// Returns the current access rights of the memory region.
+    /// The access rights are cached and updated whenever `mprotect` is called.
+    /// # Returns
+    /// - The current access rights of the memory region.
     pub fn region_access_rights(&self) -> AccessRights {
         self.memory.region_access_rights()
     }
 
-    pub fn read(&self) -> Result<ProtectedGuard<'_, A, T>, super::ProtectedMemoryError> {
+    /// Attempts to read from the protected memory region.
+    /// If the memory region has read access, returns a `ReadGuard` that allows safe
+    /// reading of the memory.
+    /// If the memory region does not have read access, returns a `ProtectedMemoryError::ReadAccessViolation` error.
+    /// # Returns
+    /// - `Ok(ReadGuard)`: A guard that allows safe reading of the memory
+    ///     if read access is allowed.
+    /// - `Err(ProtectedMemoryError)`: An error if read access is not allowed
+    ///   or if there is another access violation.
+    pub fn read(&self) -> Result<ReadGuard<'_, A, T>, super::ProtectedMemoryError> {
         if !self.can_read() {
             return Err(super::ProtectedMemoryError::ReadAccessViolation);
         }
-        Ok(ProtectedGuard { memory: self })
+        Ok(ReadGuard { memory: self })
     }
 
-    pub fn write(&mut self) -> Result<ProtectedGuardMut<'_, A, T>, super::ProtectedMemoryError> {
+    /// Attempts to write to the protected memory region.
+    /// If the memory region has write access, returns a `WriteGuard` that allows safe
+    /// writing to the memory.
+    /// If the memory region does not have write access, returns a `ProtectedMemoryError::WriteAccessViolation` 
+    /// error.
+    /// # Returns
+    /// - `Ok(WriteGuard)`: A guard that allows safe writing to the
+    ///   memory if write access is allowed.
+    /// - `Err(ProtectedMemoryError)`: An error if write access is not allowed
+    ///  or if there is another access violation.    
+    pub fn write(&mut self) -> Result<WriteGuard<'_, A, T>, super::ProtectedMemoryError> {
         if !self.can_write() {
             return Err(super::ProtectedMemoryError::WriteAccessViolation);
         }
-        Ok(ProtectedGuardMut { memory: self })
+        Ok(WriteGuard { memory: self })
     }
 
+    /// Checks if the memory region can be written to based on the current access rights and pkey settings.
+    /// # Returns
+    /// - `true`: If the memory region can be written to.
+    /// - `false`: If the memory region cannot be written to.
     fn can_write(&self) -> bool {
         let mut can_write = true;
         if let Some(pkey) = &self.pkey {
@@ -85,6 +140,10 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
         can_write
     }
 
+    /// Checks if the memory region can be read from based on the current access rights and pkey settings.
+    /// # Returns
+    /// - `true`: If the memory region can be read from.
+    /// - `false`: If the memory region cannot be read from.
     fn can_read(&self) -> bool {
         let mut can_read = true;
         if let Some(pkey) = &self.pkey {
@@ -101,11 +160,12 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     }
 }
 
-pub struct ProtectedGuard<'a, A: allocator::Allocator<T>, T> {
+/// A guard that provides safe read access to a `ProtectedMemory` instance.
+pub struct ReadGuard<'a, A: allocator::Allocator<T>, T> {
     memory: &'a ProtectedMemory<A, T>,
 }
 
-impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuard<'a, A, T> {
+impl<'a, A: allocator::Allocator<T>, T> Deref for ReadGuard<'a, A, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         unsafe {
@@ -114,11 +174,11 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuard<'a, A, T> {
     }
 }
 
-pub struct ProtectedGuardMut<'a, A: allocator::Allocator<T>, T> {
+pub struct WriteGuard<'a, A: allocator::Allocator<T>, T> {
     memory: &'a mut ProtectedMemory<A, T>,
 }
 
-impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuardMut<'a, A, T> {
+impl<'a, A: allocator::Allocator<T>, T> Deref for WriteGuard<'a, A, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         unsafe {
@@ -127,7 +187,7 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for ProtectedGuardMut<'a, A, T> {
     }
 }
 
-impl<'a, A: allocator::Allocator<T>, T> DerefMut for ProtectedGuardMut<'a, A, T> {
+impl<'a, A: allocator::Allocator<T>, T> DerefMut for WriteGuard<'a, A, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
             self.memory.memory.ptr().as_mut().unwrap()      // NonNull<T>

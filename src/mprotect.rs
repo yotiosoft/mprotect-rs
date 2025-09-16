@@ -33,9 +33,9 @@ pub enum AccessRights {
 /// A memory region that is protected with mprotect/pkey_mprotect.
 /// It uses a specified allocator to allocate and deallocate memory.
 /// The memory region can optionally be associated with a protection key (pkey).
-/// The memory region is automatically deallocated when the `UnProtectedMemory`
+/// The memory region is automatically deallocated when the `UnsafeProtectedMemory`
 /// instance is dropped.
-/// `UnProtectedMemory` provides low-level access to the memory region
+/// `UnsafeProtectedMemory` provides low-level access to the memory region
 /// and does not enforce access rights at the Rust type system level.
 /// Users must ensure that they respect the access rights set for the memory region.
 /// If access rights are violated, it may lead to cause a segmentation fault by the OS.
@@ -48,7 +48,7 @@ pub enum AccessRights {
 /// - `pkey_id`: An optional protection key ID associated with the memory region.
 /// - `allocator`: The allocator instance used to manage the memory region.
 /// - `region_access_rights`: The current access rights of the memory region.
-pub struct UnProtectedMemory<A: allocator::Allocator<T>, T> {
+pub struct UnsafeProtectedMemory<A: allocator::Allocator<T>, T> {
     ptr: NonNull<T>,
     len: usize,
     pkey_id: Option<u32>,
@@ -56,14 +56,14 @@ pub struct UnProtectedMemory<A: allocator::Allocator<T>, T> {
     region_access_rights: AccessRights,
 }
 
-/// Implementation of methods for `UnProtectedMemory`.
-impl<A: allocator::Allocator<T>, T> UnProtectedMemory<A, T> {
+/// Implementation of methods for `UnsafeProtectedMemory`.
+impl<A: allocator::Allocator<T>, T> UnsafeProtectedMemory<A, T> {
     /// Allocates a new memory region without associating it with a protection key.
     /// The memory region is allocated with the specified access rights.
     /// # Arguments
     /// - `access_rights`: The access rights to be set for the memory region.
     /// # Returns
-    /// - `Ok(UnProtectedMemory)`: On successful allocation.
+    /// - `Ok(UnsafeProtectedMemory)`: On successful allocation.
     /// - `Err(MprotectError)`: If memory allocation fails.
     pub fn without_pkey(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
@@ -88,7 +88,7 @@ impl<A: allocator::Allocator<T>, T> UnProtectedMemory<A, T> {
     /// - `pkey`: A reference to the `PKey` to be associated with
     /// the memory region.
     /// # Returns
-    /// - `Ok(UnProtectedMemory)`: On successful allocation and association.
+    /// - `Ok(UnsafeProtectedMemory)`: On successful allocation and association.
     /// - `Err(MprotectError)`: If memory allocation or pkey association fails.         
     pub fn with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
@@ -181,7 +181,7 @@ impl<A: allocator::Allocator<T>, T> UnProtectedMemory<A, T> {
     /// - `Ok(())`: On successful change of access rights and association.
     /// - `Err(MprotectError)`: If the `pkey_mprotect` system call fails
     /// or if no protection key is associated with the memory region.
-    /// This method updates the internal state of the `UnProtectedMemory`
+    /// This method updates the internal state of the `UnsafeProtectedMemory`
     /// instance to reflect the new protection key association.
     pub fn pkey_mprotect(&mut self, access_rights: AccessRights, pkey: &PKey) -> Result<(), super::MprotectError> {
         self.pkey_id = Some(pkey.key());
@@ -232,8 +232,8 @@ impl<A: allocator::Allocator<T>, T> UnProtectedMemory<A, T> {
     }
 }
 
-impl<A: allocator::Allocator<T>, T> Drop for UnProtectedMemory<A, T> {
-    /// Automatically deallocates the memory region when the `UnProtectedMemory`
+impl<A: allocator::Allocator<T>, T> Drop for UnsafeProtectedMemory<A, T> {
+    /// Automatically deallocates the memory region when the `UnsafeProtectedMemory`
     /// instance is dropped. If deallocation fails, it panics with an error message.
     fn drop(&mut self) {
         let ret = self.allocator.deallocate();

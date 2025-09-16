@@ -21,7 +21,7 @@ impl std::fmt::Display for RuntimeError {
 
 fn child_pkey_workloads() -> Result<(), RuntimeError> {
     let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-    let mut protected_mem = UnProtectedMemory::<allocator::Mmap, u32>::with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
+    let mut protected_mem = UnsafeProtectedMemory::<allocator::Mmap, u32>::with_pkey(AccessRights::ReadWrite, &pkey).map_err(RuntimeError::MprotectError)?;
 
     //let mut protected_mem = ProtectedMemory::<u32>::without_pkey(AccessRights::Read)?;
 
@@ -45,7 +45,7 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     println!("\tAttempt to create another pkey and allocate memory with it");
     let pkey2 = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
     println!("\t\tCreated another pkey {}", pkey2.key());
-    let mut new_memory = UnProtectedMemory::<allocator::Jmalloc, u32>::with_pkey(AccessRights::ReadWrite, &pkey2).map_err(RuntimeError::MprotectError)?;
+    let mut new_memory = UnsafeProtectedMemory::<allocator::Jmalloc, u32>::with_pkey(AccessRights::ReadWrite, &pkey2).map_err(RuntimeError::MprotectError)?;
     println!("\tSet the value in pkey {} memory to 100", pkey2.key());
     *new_memory.as_mut() = 100;
     println!("\t\tValue in new memory: {}", *new_memory.as_ref());
