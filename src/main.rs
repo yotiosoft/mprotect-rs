@@ -128,23 +128,29 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
         println!("\tCreating GuardedProtectionKey to set pkey to DisableWrite");
         let _guarded_pkey = GuardedProtectionKey::new(&pkey, PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
         println!("\tAttempt to read the value (should succeed)");
-        let guard = safe_mem.read().map_err(RuntimeError::SafeProtectedMemoryError)?;
-        println!("\t\tValue read: {}", *guard);
-
         {
+            let guard = safe_mem.read().map_err(RuntimeError::SafeProtectedMemoryError)?;
+            println!("\t\tValue read: {}", *guard);
+        }
+
+        {   // This inner scope is to test nested GuardedProtectionKey. The rights will be EnableAccessWrite here.
             println!("\tCreating GuardedProtectionKey to set pkey to EnableAccessWrite");
             let _inner_guarded_pkey = GuardedProtectionKey::new(&pkey, PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
             println!("\tAttempt to write the value 84 (should succeed)");
-            let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
-            *guard = 84;
-            println!("\t\tValue written: {}", *guard);
-        }
+            {
+                let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
+                *guard = 84;
+                println!("\t\tValue written: {}", *guard);
+            }
+        }   // End of the inner scope. The rights should revert back to DisableWrite here.
 
         println!("\tOut of inner GuardedProtectionKey scope, pkey should be back to DisableWrite");
         println!("\tAttempt to write the value 168 (should fail)");
-        let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
-        *guard = 168;
-        println!("\tValue written: {}", *guard);
+        {
+            let mut guard = safe_mem.write().map_err(RuntimeError::SafeProtectedMemoryError)?;
+            *guard = 168;
+            println!("\tValue written: {}", *guard);
+        }
     }
 
     Err(RuntimeError::UnexpectedSuccess)
