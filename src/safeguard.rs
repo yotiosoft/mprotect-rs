@@ -1,5 +1,4 @@
 pub use crate::mprotect::*;
-pub use crate::pkey::*;
 pub use crate::safemem::*;
 pub use crate::MprotectError;
 

@@ -9,6 +9,15 @@ pub enum SafeProtectedMemoryError {
     WriteAccessViolation,
     ExecuteAccessViolation,
 }
+impl std::fmt::Display for SafeProtectedMemoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SafeProtectedMemoryError::ReadAccessViolation => write!(f, "read access violation"),
+            SafeProtectedMemoryError::WriteAccessViolation => write!(f, "write access violation"),
+            SafeProtectedMemoryError::ExecuteAccessViolation => write!(f, "execute access violation"),
+        }
+    }
+}
 
 pub struct SafeProtectedMemory<A: allocator::Allocator<T>, T> {
     memory: ProtectedMemory<A, T>,
