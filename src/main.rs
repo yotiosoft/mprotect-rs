@@ -217,6 +217,19 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
         println!("\t\tValue after modification via with(): {}", value);
     }
 
+    {
+        println!("\tUsing dereference to read the value (should succeed)");
+        let value = safe_mem.deref(AccessRights::ReadWriteExec).map_err(RuntimeError::GuardError)?;
+        println!("\t\tValue read via deref(): {}", *value);
+        drop(value);
+
+        println!("\tUsing dereference to write the value 512 (should succeed)");
+        let mut value = safe_mem.deref_mut(AccessRights::ReadWriteExec).map_err(RuntimeError::GuardError)?;
+        *value = 512;
+        println!("\t\tValue written via deref(): {}", *value);
+        drop(value);
+    }
+
     Ok(())
 }
 

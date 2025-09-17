@@ -62,6 +62,40 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
             access_rights: Rc::clone(&self.access_rights),
         })
     }
+
+    pub fn deref(&self, access_rights: AccessRights) -> Result<GuardRef<'_, A, T>, GuardError> {
+        if !self.access_rights.get().contains(access_rights) {
+            self.access_rights.set(self.access_rights.get().add(access_rights));
+            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+        }
+        
+        let gen = self.generation.get();
+        Ok(GuardRef {
+            ptr: self.memory.as_ref() as *const T,
+            mem: &self.memory,
+            gen,
+            generation: Rc::clone(&self.generation),
+            default_access_rights: self.default_access_rights,
+            access_rights: Rc::clone(&self.access_rights),
+        })
+    }
+
+    pub fn deref_mut(&mut self, access_rights: AccessRights) -> Result<GuardRefMut<'_, A, T>, GuardError> {
+        if !self.access_rights.get().contains(access_rights) {
+            self.access_rights.set(self.access_rights.get().add(access_rights));
+            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+        }
+
+        let gen = self.generation.get();
+        Ok(GuardRefMut {
+            ptr: self.memory.as_mut() as *mut T,
+            mem: &mut self.memory,
+            gen,
+            generation: Rc::clone(&self.generation),
+            default_access_rights: self.default_access_rights,
+            access_rights: Rc::clone(&self.access_rights),
+        })
+    }
 }
 
 #[derive(Debug)]
