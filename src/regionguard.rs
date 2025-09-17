@@ -124,13 +124,11 @@ impl<'a, A: allocator::Allocator<T>, T> Drop for GuardRef<'a, A, T> {
             if self.default_access_rights.contains(AccessRights::Read) {
                 // The default access rights already include Read, so no need to change
                 // because dropping a read guard should not remove read access if it was there by default
-                println!("Drop read guard: default access includes Read, no change needed");
                 return;
             } else if self.access_rights.get().contains(AccessRights::Read) {
                 let new_access = self.access_rights.get().remove(AccessRights::Read);
                 let _ = self.mem.set_access(new_access);
                 self.access_rights.set(new_access);
-                println!("Drop read guard: removed Read access, new access rights: {:?}", new_access);
             }
         }
     }
@@ -186,29 +184,24 @@ impl<'a, A: allocator::Allocator<T>, T> DerefMut for GuardRefMut<'a, A, T> {
 impl<A: allocator::Allocator<T>, T> Drop for GuardRefMut<'_, A, T> {
     fn drop(&mut self) {
         if self.is_valid() {
-            println!("default_access_rights: {:?}, current access_rights: {:?}", self.default_access_rights, self.access_rights.get());
             if self.default_access_rights.contains(AccessRights::ReadWrite) {
                 // The default access rights already include ReadWrite, so no need to change
                 // because dropping a write guard should not remove read/write access if it was there by default
-                println!("Drop write guard: default access includes ReadWrite, no change needed");
                 return;
             } else if !self.default_access_rights.contains(AccessRights::Write) && self.access_rights.get().contains(AccessRights::Write) {
                 let new_access = self.access_rights.get().remove(AccessRights::Write);
                 let _ = self.mem.set_access(new_access);
                 self.access_rights.set(new_access);
-                println!("Drop write guard: removed Write access, new access rights: {:?}", new_access);
                 return;
             } else if !self.default_access_rights.contains(AccessRights::Read) && self.access_rights.get().contains(AccessRights::Read) {
                 let new_access = self.access_rights.get().remove(AccessRights::Read);
                 let _ = self.mem.set_access(new_access);
                 self.access_rights.set(new_access);
-                println!("Drop write guard: removed Read access, new access rights: {:?}", new_access);
                 return;
             } else if self.access_rights.get().contains(AccessRights::Read) || self.access_rights.get().contains(AccessRights::Write) {
                 let new_access = self.access_rights.get().remove(AccessRights::ReadWrite);
                 let _ = self.mem.set_access(new_access);
                 self.access_rights.set(new_access);
-                println!("Drop write guard: removed ReadWrite access, new access rights: {:?}", new_access);
                 return;
             }
         }
