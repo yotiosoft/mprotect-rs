@@ -191,13 +191,30 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
         println!("\tAttempt to read the value (should succeed)");
         let read_guard = safe_mem.read().map_err(RuntimeError::GuardError)?;
         println!("\t\tRead value: {}", *read_guard);
-    }
+        println!("\tDropping read_guard to release the immutable borrow");
+        drop(read_guard);  // Explicitly drop to release the immutable borrow
 
-    {
-        println!("\tAttempt to write the value 84 (should succeed)");
+        println!("\tAttempt to write the value 84 after dropping read_guard (should succeed)");
         let mut write_guard = safe_mem.write().map_err(RuntimeError::GuardError)?;
         *write_guard = 84;
         println!("\t\tWrote value: {}", *write_guard);
+        println!("\tAttempt to rewrite the value 168 using the same write_guard (should succeed)");
+        *write_guard = 168;
+        println!("\t\tRewrote value: {}", *write_guard);
+    }
+
+    {
+        println!("\tUsing with() method to get the closure access (should succeed)");
+        let value = safe_mem.read().map_err(RuntimeError::GuardError)?.with(|v| *v).map_err(RuntimeError::GuardError)?;
+        println!("\t\tValue read via with(): {}", value);
+    }
+
+    {
+        println!("\tUsing with() method to modify the value (should succeed)");
+        safe_mem.write().map_err(RuntimeError::GuardError)?.with(|v| *v = 256).map_err(RuntimeError::GuardError)?;
+        println!("\t\tGet the value after modification via with() (should succeed)");
+        let value = safe_mem.read().map_err(RuntimeError::GuardError)?.with(|v| *v).map_err(RuntimeError::GuardError)?;
+        println!("\t\tValue after modification via with(): {}", value);
     }
 
     Ok(())

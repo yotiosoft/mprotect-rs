@@ -84,9 +84,16 @@ pub struct GuardRef<'a, A: allocator::Allocator<T>, T> {
 }
 
 impl<'a, A: allocator::Allocator<T>, T> GuardRef<'a, A, T> {
-    pub fn check_validity(&self) -> Result<&T, GuardError> {
-        if self.generation.get() == self.gen {
-            unsafe { Ok(&*self.ptr) }
+    pub fn is_valid(&self) -> bool {
+        self.generation.get() == self.gen
+    }
+
+    pub fn with<F, R>(&self, f: F) -> Result<R, GuardError>
+    where 
+        F: FnOnce(&T) -> R,
+    {
+        if self.is_valid() {
+            unsafe { Ok(f(&*self.ptr)) }
         } else {
             Err(GuardError::InvalidGeneration)
         }
@@ -96,7 +103,11 @@ impl<'a, A: allocator::Allocator<T>, T> GuardRef<'a, A, T> {
 impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRef<'a, A, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        self.check_validity().expect("Failed to deref GuardRef")
+        if self.is_valid() {
+            unsafe { &*self.ptr }
+        } else {
+            panic!("Failed to deref GuardRef: invalid generation");
+        }
     }
 }
 
@@ -123,6 +134,17 @@ pub struct GuardRefMut<'a, A: allocator::Allocator<T>, T> {
 impl<'a, A: allocator::Allocator<T>, T> GuardRefMut<'a, A, T> {
     pub fn is_valid(&self) -> bool {
         self.generation.get() == self.gen
+    }
+
+    pub fn with<F, R>(&mut self, f: F) -> Result<R, GuardError>
+    where 
+        F: FnOnce(&mut T) -> R,
+    {
+        if self.is_valid() {
+            unsafe { Ok(f(&mut *self.ptr)) }
+        } else {
+            Err(GuardError::InvalidGeneration)
+        }
     }
 }
 
