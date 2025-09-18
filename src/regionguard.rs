@@ -81,10 +81,12 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     }
 
     pub fn deref_mut(&mut self, access_rights: AccessRights) -> Result<GuardRefMut<'_, A, T>, GuardError> {
+        println!("deref_mut requested with access rights: {:?}", access_rights);
         if !self.access_rights.get().contains(access_rights) {
             self.access_rights.set(self.access_rights.get().add(access_rights));
             self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
         }
+        println!("deref_mut requested with access rights: {:?}", self.access_rights.get());
 
         let gen = self.generation.get();
         Ok(GuardRefMut {

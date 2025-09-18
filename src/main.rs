@@ -161,7 +161,7 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
 }
 
 fn child_regionguard_workloads() -> Result<(), RuntimeError> {
-    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessRights::Read).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessRights::None).map_err(RuntimeError::MprotectError)?;
 
     {
         println!("\tCreated RegionGuard with ReadWrite access (should succeed)");
