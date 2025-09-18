@@ -41,7 +41,7 @@ pub trait Allocator<T> {
 
 impl<A: Allocator<T>, T> MemoryRegion<A, T> {
     pub fn allocate(access_rights: &super::AccessRights) -> Result<Self, AllocatorError> {
-        let access_rights = *access_rights as i32;
+        let access_rights = access_rights.to_i32();
         A::allocator_alloc(&access_rights)
     }
     pub fn deallocate(&self) -> Result<(), AllocatorError> {

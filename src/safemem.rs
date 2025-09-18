@@ -42,7 +42,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// succeeds.
     /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
-        let memory = UnsafeProtectedRegion::new(access_rights)?;
+        let memory = UnsafeProtectedRegion::new(&access_rights)?;
         Ok(Self { memory, pkey: None , access_rights })
     }
 
@@ -56,7 +56,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// succeeds.
     /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
-        let mut memory = UnsafeProtectedRegion::new(access_rights)?;
+        let mut memory = UnsafeProtectedRegion::new(&access_rights)?;
         memory.set_pkey(access_rights, pkey)?;
         Ok(Self { memory, pkey: Some(pkey.clone()), access_rights })
     }
@@ -135,7 +135,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
                 can_write = false;
             }
         }
-        if self.region_access_rights() == AccessRights::Read || self.region_access_rights() == AccessRights::Exec || self.region_access_rights() == AccessRights::ReadExec || self.region_access_rights() == AccessRights::None {
+        if self.region_access_rights() == AccessRights::READ || self.region_access_rights() == AccessRights::EXEC || self.region_access_rights() == AccessRights::READ_EXEC || self.region_access_rights() == AccessRights::NONE {
             can_write = false;
         }
 
@@ -154,7 +154,7 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
                 can_read = false;
             }
         }
-        if self.region_access_rights() == AccessRights::None || self.region_access_rights() == AccessRights::Exec || self.region_access_rights() == AccessRights::Write || self.region_access_rights() == AccessRights::WriteExec {
+        if self.region_access_rights() == AccessRights::NONE || self.region_access_rights() == AccessRights::EXEC || self.region_access_rights() == AccessRights::WRITE || self.region_access_rights() == AccessRights::WRITE_EXEC {
             can_read = false;
         }
 
