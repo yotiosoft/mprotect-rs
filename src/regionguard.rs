@@ -4,23 +4,23 @@ use std::cell::Cell;
 use std::io::Read;
 use std::rc::Rc;
 use std::ops::{Deref, DerefMut};
-pub struct RegionGuard<A: allocator::Allocator<T>, AL: ReadAllowed + WriteAllowed + ExecuteAllowed + Clone, T> {
+pub struct RegionGuard<A: allocator::Allocator<T>, T> {
     memory: UnsafeProtectedRegion<A, T>,
     generation: Rc<Cell<u64>>,
-    default_access_rights: AL,
-    access_rights: Rc<Cell<AL>>,
+    default_access_rights: AccessRights,
+    access_rights: Rc<Cell<AccessRights>>,
 }
 
-impl<A: allocator::Allocator<T>, AL: ReadAllowed + WriteAllowed + ExecuteAllowed + Clone, T> RegionGuard<A, AL, T> {
-    pub fn new(access_rights: AL) -> Result<Self, super::MprotectError> {
+impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
+    pub fn new<R: AllAccesses>(access_rights: R) -> Result<Self, super::MprotectError> {
         let generation = Rc::new(Cell::new(0));
-        let memory = UnsafeProtectedRegion::new(&access_rights)?;
+        let memory = UnsafeProtectedRegion::new(access_rights.value())?;
         Ok(
             RegionGuard {
                 memory,
                 generation,
-                default_access_rights: access_rights.clone(),
-                access_rights: Rc::new(Cell::new(access_rights)),
+                default_access_rights: access_rights.value(),
+                access_rights: Rc::new(Cell::new(access_rights.value())),
             }
         )
     }
@@ -33,7 +33,7 @@ impl<A: allocator::Allocator<T>, AL: ReadAllowed + WriteAllowed + ExecuteAllowed
     pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> {
         if !self.access_rights.get().has(AccessRights::READ) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::READ));
-            self.memory.set_access(self.access_rights).map_err(GuardError::CannotSetAccessRights)?;
+            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
         }
 
         let gen = self.generation.get();

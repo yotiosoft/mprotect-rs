@@ -81,26 +81,28 @@ impl AccessRights {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct NoAccess;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ReadOnly;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct WriteOnly;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ExecuteOnly;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ReadWrite;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ReadExecute;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct WriteExecute;
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ReadWriteExecute;
 
-pub trait AccessValue { fn value(&self) -> AccessRights; }
+pub trait AccessValue {
+    fn value(&self) -> AccessRights; 
+}
 
-impl AccessValue for NoAccess { fn value(&self) -> AccessRights { AccessRights::NONE } }
+impl AccessValue for NoAccess {  fn value(&self) -> AccessRights { AccessRights::NONE } }
 impl AccessValue for ReadOnly { fn value(&self) -> AccessRights { AccessRights::READ } }
 impl AccessValue for WriteOnly { fn value(&self) -> AccessRights { AccessRights::WRITE } }
 impl AccessValue for ExecuteOnly { fn value(&self) -> AccessRights { AccessRights::EXEC } }
@@ -174,8 +176,8 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(UnsafeProtectedRegion)`: On successful allocation.
     /// - `Err(MprotectError)`: If memory allocation fails.
-    pub fn new<AL: ReadAllowed + WriteAllowed + ExecuteAllowed>(access_rights: &AL) -> Result<Self, super::MprotectError> {
-        let allocator = allocator::MemoryRegion::allocate(&access_rights.value())
+    pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
+        let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
                 allocator::AllocatorError::MunmapFailed(errno) => errno,
@@ -197,12 +199,12 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights.
     /// - `Err(MprotectError)`: If the `mprotect` system call fails
-    pub fn set_access<AL: ReadAllowed + WriteAllowed + ExecuteAllowed>(&self, access_rights: AL) -> Result<(), super::MprotectError> {
+    pub fn set_access(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         let ret = unsafe {
             libc::mprotect(
                 self.ptr.as_ptr() as *mut libc::c_void,
                 self.len,
-                access_rights.value().to_i32(),
+                access_rights.to_i32(),
             )
         };
         if ret != 0 {
@@ -222,7 +224,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights and association.
     /// - `Err(MprotectError)`: If the `pkey_mprotect` system
-    fn impl_pkey_mprotect<AL: ReadAllowed + WriteAllowed + ExecuteAllowed>(access_rights: AL, ptr: *mut libc::c_void, len: usize, pkey_id: Option<u32>) -> Result<(), super::MprotectError> {
+    fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: Option<u32>) -> Result<(), super::MprotectError> {
         if let None = pkey_id {
             return Err(super::MprotectError::NoPkeyAssociated);
         }
@@ -233,7 +235,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
                 libc::SYS_pkey_mprotect,
                 ptr,
                 len,
-                access_rights.value().to_i32(),
+                access_rights.to_i32(),
                 pkey_id
             )
         };
@@ -257,7 +259,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// or if no protection key is associated with the memory region.
     /// This method updates the internal state of the `UnsafeProtectedRegion`
     /// instance to reflect the new protection key association.
-    pub fn set_pkey<AL: ReadAllowed + WriteAllowed + ExecuteAllowed>(&mut self, access_rights: AL, pkey: &PKey) -> Result<(), super::MprotectError> {
+    pub fn set_pkey(&mut self, access_rights: AccessRights, pkey: &PKey) -> Result<(), super::MprotectError> {
         self.pkey_id = Some(pkey.key());
         Self::impl_pkey_mprotect(access_rights, self.ptr.as_ptr() as *mut libc::c_void, self.len, self.pkey_id)
     }
