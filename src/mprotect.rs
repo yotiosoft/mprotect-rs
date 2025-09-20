@@ -9,7 +9,9 @@ pub mod allocator;
 
 pub mod access_rights;
 pub use access_rights::AccessRights;
-pub use access_rights::AccessPermissions::*;
+pub use access_rights::access_permissions as AccessPermissions;
+pub use AccessPermissions::{ ReadAllowed, WriteAllowed, ExecuteAllowed, NoAccessAllowed, AllAccesses };
+pub use AccessPermissions::{ ReadAllowedTrait, WriteAllowedTrait, ExecuteAllowedTrait, NoAccessAllowedTrait, AllAccessesTrait };
 
 /// A memory region that is protected with mprotect/pkey_mprotect.
 /// It uses a specified allocator to allocate and deallocate memory.

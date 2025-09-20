@@ -1,17 +1,5 @@
 use bitflags::bitflags;
 
-/// Memory protection flags.
-/// These correspond to the Page Table Entry (PTE) flags.
-/// - `None`: No access.
-/// - `Read`: Read-only access.
-/// - `Write`: Write-only access.
-/// - `Exec`: Execute-only access.
-/// - `ReadWrite`: Read and write access.
-/// - `ReadExec`: Read and execute access.
-/// - `WriteExec`: Write and execute access.
-/// - `ReadWriteExec`: Read, write, and execute access.
-//#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-//#[repr(i32)]
 bitflags! {
     /// Memory protection flags represented as bitflags.
     /// These correspond to the Page Table Entry (PTE) flags.
@@ -73,8 +61,14 @@ impl AccessRights {
     }
 }
 
-pub mod AccessPermissions {
+pub mod access_permissions {
     use super::AccessRights;
+
+    pub use read_allowed as ReadAllowed;
+    pub use write_allowed as WriteAllowed;
+    pub use execute_allowed as ExecuteAllowed;
+    pub use no_access as NoAccessAllowed;
+    pub use all_accesses as AllAccesses;
 
     #[derive(Copy, Clone)]
     pub struct NoAccess;
@@ -107,7 +101,7 @@ pub mod AccessPermissions {
     impl AccessPermission for ReadWriteExecute { fn value(&self) -> AccessRights { AccessRights::READ_WRITE_EXEC } }
 
     pub trait ReadAllowedTrait: AccessPermission {}
-    pub mod ReadAllowed {
+    pub mod read_allowed {
         pub use super::*;
         impl ReadAllowedTrait for ReadOnly {}
         impl ReadAllowedTrait for ReadWrite {}
@@ -116,7 +110,7 @@ pub mod AccessPermissions {
     }
 
     pub trait WriteAllowedTrait: AccessPermission {}
-    pub mod WriteAllowed {
+    pub mod write_allowed {
         pub use super::*;
         impl WriteAllowedTrait for WriteOnly {}
         impl WriteAllowedTrait for ReadWrite {}
@@ -125,7 +119,7 @@ pub mod AccessPermissions {
     }
 
     pub trait ExecuteAllowedTrait: AccessPermission {}
-    pub mod ExecuteAllowed {
+    pub mod execute_allowed {
         pub use super::*;
         impl ExecuteAllowedTrait for ExecuteOnly {}
         impl ExecuteAllowedTrait for ReadExecute {}
@@ -134,13 +128,13 @@ pub mod AccessPermissions {
     }
 
     pub trait NoAccessAllowedTrait: AccessPermission {}
-    pub mod NoAccessAllowed {
+    pub mod no_access {
         pub use super::*;
         impl NoAccessAllowedTrait for NoAccess {}
     }
 
     pub trait AllAccessesTrait { fn value(&self) -> AccessRights; }
-    pub mod AllAccesses {
+    pub mod all_accesses {
         pub use super::*;
         impl AllAccessesTrait for NoAccess { fn value(&self) -> AccessRights { AccessRights::NONE } }
         impl AllAccessesTrait for ReadOnly { fn value(&self) -> AccessRights { AccessRights::READ } }
