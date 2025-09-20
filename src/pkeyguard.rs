@@ -1,4 +1,3 @@
-use crate::pkey;
 use crate::pkey::*;
 
 use crate::mprotect::*;
@@ -12,13 +11,13 @@ pub struct PkeyGuard {
     default_access_rights: PkeyAccessRights,
 }
 
-pub struct AssociatedRegionRef<'a, A: allocator::Allocator<T>, T> {
-    region: &'a RegionGuard<A, T>,
-    pkey_id: u32,
+pub struct AssociatedRegionRef<'r, 'p, A: allocator::Allocator<T>, T> {
+    region: &'r RegionGuard<A, T>,
+    pkey: &'p PKey,
 }
-impl<'a, A: allocator::Allocator<T>, T> AssociatedRegionRef<'a, A, T> {
-    pub fn new(region: &'a RegionGuard<A, T>, pkey_id: u32) -> Self {
-        AssociatedRegionRef { region, pkey_id }
+impl<'r, 'p, A: allocator::Allocator<T>, T> AssociatedRegionRef<'r, 'p, A, T> {
+    pub fn new(region: &'r RegionGuard<A, T>, pkey: &'p PKey) -> Self {
+        AssociatedRegionRef { region, pkey }
     }
 
     pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> {
@@ -29,15 +28,22 @@ impl<'a, A: allocator::Allocator<T>, T> AssociatedRegionRef<'a, A, T> {
         self.region.deref(access_rights)
     }
 }
-
-pub struct AssociatedRegionRefMut<'a, A: allocator::Allocator<T>, T> {
-    region: &'a mut RegionGuard<A, T>,
-    pkey_id: u32,
+impl<'r, 'p, A: allocator::Allocator<T>, T> Drop for AssociatedRegionRef<'r, 'p, A, T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.pkey.disassociate(self.region.get_region(), self.region.access_rights()).expect("Failed to disassociate pkey from region");
+        }
+    }
 }
 
-impl<'a, A: allocator::Allocator<T>, T> AssociatedRegionRefMut<'a, A, T> {
-    pub fn new(region: &'a mut RegionGuard<A, T>, pkey_id: u32) -> Self {
-        AssociatedRegionRefMut { region, pkey_id }
+pub struct AssociatedRegionRefMut<'r, A: allocator::Allocator<T>, T> {
+    region: &'r mut RegionGuard<A, T>,
+    pkey: PKey,
+}
+
+impl<'r, A: allocator::Allocator<T>, T> AssociatedRegionRefMut<'r, A, T> {
+    pub fn new(region: &'r mut RegionGuard<A, T>, pkey: &PKey) -> Self {
+        AssociatedRegionRefMut { region, pkey: pkey.clone() }
     }
 
     pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> {
@@ -57,43 +63,50 @@ impl<'a, A: allocator::Allocator<T>, T> AssociatedRegionRefMut<'a, A, T> {
     }
 }
 
-pub struct PkeyGuardRef<'a> {
-    pkey_guard: &'a PkeyGuard,
+impl<'r, 'p, A: allocator::Allocator<T>, T> Drop for AssociatedRegionRefMut<'r, A, T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.pkey.disassociate(self.region.get_region(), self.region.access_rights()).expect("Failed to disassociate pkey from region");
+        }
+    }
 }
-impl<'a> PkeyGuardRef<'a> {
-    pub fn new(pkey_guard: &'a PkeyGuard) -> Self {
+
+pub struct PkeyGuardRef<'p> {
+    pkey_guard: &'p PkeyGuard,
+}
+impl<'p> PkeyGuardRef<'p> {
+    pub fn new(pkey_guard: &'p PkeyGuard) -> Self {
         PkeyGuardRef { pkey_guard }
     }
 
-    pub fn associate_region_deref<A: allocator::Allocator<u32>>(&self, region: &'a RegionGuard<A, u32>) -> Result<AssociatedRegionRef<'a, A, u32>, super::MprotectError> {
+    pub fn associate_region_deref<'r, A: allocator::Allocator<u32>>(&self, region: &'r RegionGuard<A, u32>) -> Result<AssociatedRegionRef<'r, 'p, A, u32>, super::MprotectError> {
         unsafe {
             self.pkey_guard.pkey.associate(region.get_region(), region.access_rights())?;
         }
-        Ok(AssociatedRegionRef::new(region, self.pkey_guard.pkey.key()))
+        Ok(AssociatedRegionRef::new(region, &self.pkey_guard.pkey))
     }
-
 }
 
-pub struct PkeyGuardRefMut<'a> {
-    pkey_guard: &'a mut PkeyGuard,
+pub struct PkeyGuardRefMut<'p> {
+    pkey_guard: &'p mut PkeyGuard,
 }
-impl<'a> PkeyGuardRefMut<'a> {
-    pub fn new(pkey_guard: &'a mut PkeyGuard) -> Self {
+impl<'p> PkeyGuardRefMut<'p> {
+    pub fn new(pkey_guard: &'p mut PkeyGuard) -> Self {
         PkeyGuardRefMut { pkey_guard }
     }
 
-    pub fn associate_region_deref<A: allocator::Allocator<u32>>(&self, region: &'a RegionGuard<A, u32>) -> Result<AssociatedRegionRef<'a, A, u32>, super::MprotectError> {
+    pub fn associate_region_deref<'r, A: allocator::Allocator<u32>>(&'p self, region: &'r RegionGuard<A, u32>) -> Result<AssociatedRegionRef<'r, 'p, A, u32>, super::MprotectError> {
         unsafe {
             self.pkey_guard.pkey.associate(region.get_region(), region.access_rights())?;
         }
-        Ok(AssociatedRegionRef::new(region, self.pkey_guard.pkey.key()))
+        Ok(AssociatedRegionRef::new(region, &self.pkey_guard.pkey))
     }
 
-    pub fn associate_region_deref_mut<A: allocator::Allocator<u32>>(&mut self, region: &'a mut RegionGuard<A, u32>) -> Result<AssociatedRegionRefMut<'a, A, u32>, super::MprotectError> {
+    pub fn associate_region_deref_mut<'r, A: allocator::Allocator<u32>>(&'p mut self, region: &'r mut RegionGuard<A, u32>) -> Result<AssociatedRegionRefMut<'r, A, u32>, super::MprotectError> {
         unsafe {
             self.pkey_guard.pkey.associate(region.get_region(), region.access_rights())?;
         }
-        Ok(AssociatedRegionRefMut::new(region, self.pkey_guard.pkey.key()))
+        Ok(AssociatedRegionRefMut::new(region, &self.pkey_guard.pkey))
     }
 }
 

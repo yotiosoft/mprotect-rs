@@ -246,19 +246,24 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
 
     {
         let assoc = pkey.deref(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?.associate_region_deref(&safe_mem).map_err(RuntimeError::MprotectError)?;
-        let value = assoc.read().map_err(RuntimeError::GuardError)?;
-        println!("\tValue read via associated region deref(): {}", *value);
+        {
+            let value = assoc.read().map_err(RuntimeError::GuardError)?;
+            println!("\tValue read via associated region deref(): {}", *value);
+        }
     }
 
     {
         let mut assoc = pkey.deref_mut(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?.associate_region_deref_mut(&mut safe_mem).map_err(RuntimeError::MprotectError)?;
-        let mut value = assoc.write().map_err(RuntimeError::GuardError)?;
-        *value = 42;
-        println!("\tValue written via associated region deref(): {}", *value);
-        drop(value);
+        {
+            let mut value = assoc.write().map_err(RuntimeError::GuardError)?;
+            *value = 42;
+            println!("\tValue written via associated region deref(): {}", *value);
+        }
 
-        let value = assoc.read().map_err(RuntimeError::GuardError)?;
-        println!("\tValue read via associated region deref(): {}", *value);
+        {
+            let value = assoc.read().map_err(RuntimeError::GuardError)?;
+            println!("\tValue read via associated region deref(): {}", *value);
+        }
     }
 
     Ok(())

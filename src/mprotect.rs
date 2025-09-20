@@ -1,7 +1,6 @@
 use core::panic;
 
 use libc;
-use super::PKey;
 
 use std::ptr::NonNull;
 

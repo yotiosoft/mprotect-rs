@@ -120,12 +120,7 @@ impl PKey {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights and association.
     /// - `Err(MprotectError)`: If the `pkey_mprotect` system
-    fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: Option<u32>) -> Result<(), super::MprotectError> {
-        if let None = pkey_id {
-            return Err(super::MprotectError::NoPkeyAssociated);
-        }
-
-        let pkey_id = pkey_id.unwrap();
+    fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: u32) -> Result<(), super::MprotectError> {
         let ret = unsafe {
             libc::syscall(
                 libc::SYS_pkey_mprotect,
@@ -156,7 +151,22 @@ impl PKey {
     /// This method updates the internal state of the `UnsafeProtectedRegion`
     /// instance to reflect the new protection key association.
     pub unsafe fn associate<A: allocator::Allocator<T>, T>(&self, region: &UnsafeProtectedRegion<A, T>, access_rights: AccessRights) -> Result<(), super::MprotectError> {
-        Self::impl_pkey_mprotect(access_rights, region.ptr() as *mut libc::c_void, region.len(), Some(self.key))?;
+        Self::impl_pkey_mprotect(access_rights, region.ptr() as *mut libc::c_void, region.len(), self.key)?;
+        Ok(())
+    }
+
+    /// Reset the association of the memory region with any protection key.
+    /// Fundamentally, the default protection key is 0, which is always enabled.
+    /// # Arguments
+    /// - `region`: A reference to the `UnsafeProtectedRegion` to be disassociated
+    /// from any protection key.
+    /// # Returns
+    /// - `Ok(())`: On successful disassociation.
+    /// - `Err(MprotectError)`: If the `pkey_mprotect` system call fails.
+    /// This method updates the internal state of the `UnsafeProtectedRegion`
+    /// instance to reflect the removal of the protection key association.
+    pub unsafe fn disassociate<A: allocator::Allocator<T>, T>(&self, region: &UnsafeProtectedRegion<A, T>, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+        Self::impl_pkey_mprotect(access_rights, region.ptr() as *mut libc::c_void, region.len(), 0)?;
         Ok(())
     }
 }
