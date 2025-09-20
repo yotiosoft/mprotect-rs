@@ -1,9 +1,8 @@
 use crate::{mprotect::*, MprotectError};
 
 use std::cell::Cell;
-use std::io::Read;
 use std::rc::Rc;
-use std::ops::{Deref, DerefMut};
+use std::ops::{ Deref, DerefMut };
 pub struct RegionGuard<A: allocator::Allocator<T>, T> {
     memory: UnsafeProtectedRegion<A, T>,
     generation: Rc<Cell<u64>>,
@@ -12,7 +11,7 @@ pub struct RegionGuard<A: allocator::Allocator<T>, T> {
 }
 
 impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
-    pub fn new<R: AllAccesses>(access_rights: R) -> Result<Self, super::MprotectError> {
+    pub fn new<R: AllAccessesTrait>(access_rights: R) -> Result<Self, super::MprotectError> {
         let generation = Rc::new(Cell::new(0));
         let memory = UnsafeProtectedRegion::new(access_rights.value())?;
         Ok(
@@ -64,7 +63,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
         })
     }
 
-    pub fn deref<R: ReadAllowed>(&self, access_rights: R) -> Result<GuardRef<'_, A, T>, GuardError> {
+    pub fn deref<R: ReadAllowedTrait>(&self, access_rights: R) -> Result<GuardRef<'_, A, T>, GuardError> {
         if !self.access_rights.get().contains(access_rights.value()) {
             self.access_rights.set(self.access_rights.get().add(access_rights.value()));
             self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
@@ -81,13 +80,11 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
         })
     }
 
-    pub fn deref_mut<W: WriteAllowed>(&mut self, access_rights: W) -> Result<GuardRefMut<'_, A, T>, GuardError> {
-        println!("deref_mut requested with access rights: {:?}", access_rights.value());
+    pub fn deref_mut<R: WriteAllowedTrait>(&mut self, access_rights: R) -> Result<GuardRefMut<'_, A, T>, GuardError> {
         if !self.access_rights.get().contains(access_rights.value()) {
             self.access_rights.set(self.access_rights.get().add(access_rights.value()));
             self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
         }
-        println!("deref_mut requested with access rights: {:?}", self.access_rights.get());
 
         let gen = self.generation.get();
         Ok(GuardRefMut {
