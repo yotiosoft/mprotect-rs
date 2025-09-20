@@ -233,6 +233,30 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
     Ok(())
 }
 
+fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(NoAccessAllowed::NoAccess).map_err(RuntimeError::MprotectError)?;
+    let pkey = PkeyGuard::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
+
+    {
+        let assoc = pkey.associate_region_deref(&safe_mem);
+        let value = assoc.read().map_err(RuntimeError::GuardError)?;
+        println!("\tValue read via associated region deref(): {}", *value);
+    }
+
+    {
+        let mut assoc = pkey.associate_region_deref_mut(&mut safe_mem);
+        let mut value = assoc.write().map_err(RuntimeError::GuardError)?;
+        *value = 42;
+        println!("\tValue written via associated region deref(): {}", *value);
+        drop(value);
+
+        let value = assoc.read().map_err(RuntimeError::GuardError)?;
+        println!("\tValue read via associated region deref(): {}", *value);
+    }
+
+    Ok(())
+}
+
 fn handle_child_exit(flag: String) {
     // Do workloads in a child process
     let status = Command::new(std::env::current_exe().unwrap())
