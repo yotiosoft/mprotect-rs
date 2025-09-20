@@ -6,11 +6,6 @@ use crate::GuardRef;
 use crate::GuardRefMut;
 use crate::GuardError;
 
-pub struct PkeyGuard {
-    pkey: PKey,
-    default_access_rights: PkeyAccessRights,
-}
-
 pub struct AssociatedRegionRef<'r, 'p, A: allocator::Allocator<T>, T> {
     region: &'r RegionGuard<A, T>,
     pkey: &'p PKey,
@@ -86,28 +81,45 @@ impl<'p> PkeyGuardRef<'p> {
         Ok(AssociatedRegionRef::new(region, &self.pkey_guard.pkey))
     }
 }
+impl<'p> Drop for PkeyGuardRef<'p> {
+    fn drop(&mut self) {
+        println!("Resetting pkey {} access rights to default {:?}", self.pkey_guard.pkey.key(), self.pkey_guard.default_access_rights);
+        self.pkey_guard.pkey.set_access_rights(self.pkey_guard.default_access_rights).expect("Failed to reset pkey access rights");
+    }
+}
 
 pub struct PkeyGuardRefMut<'p> {
-    pkey_guard: &'p mut PkeyGuard,
+    pkey_guard: &'p PkeyGuard,
 }
 impl<'p> PkeyGuardRefMut<'p> {
-    pub fn new(pkey_guard: &'p mut PkeyGuard) -> Self {
+    pub fn new(pkey_guard: &'p PkeyGuard) -> Self {
         PkeyGuardRefMut { pkey_guard }
     }
 
-    pub fn associate_region_deref<'r, A: allocator::Allocator<u32>>(&'p self, region: &'r RegionGuard<A, u32>) -> Result<AssociatedRegionRef<'r, 'p, A, u32>, super::MprotectError> {
+    pub fn associate_region_deref<'r, A: allocator::Allocator<u32>>(&self, region: &'r RegionGuard<A, u32>) -> Result<AssociatedRegionRef<'r, 'p, A, u32>, super::MprotectError> {
         unsafe {
             self.pkey_guard.pkey.associate(region.get_region(), region.access_rights())?;
         }
         Ok(AssociatedRegionRef::new(region, &self.pkey_guard.pkey))
     }
 
-    pub fn associate_region_deref_mut<'r, A: allocator::Allocator<u32>>(&'p mut self, region: &'r mut RegionGuard<A, u32>) -> Result<AssociatedRegionRefMut<'r, A, u32>, super::MprotectError> {
+    pub fn associate_region_deref_mut<'r, A: allocator::Allocator<u32>>(&mut self, region: &'r mut RegionGuard<A, u32>) -> Result<AssociatedRegionRefMut<'r, A, u32>, super::MprotectError> {
         unsafe {
             self.pkey_guard.pkey.associate(region.get_region(), region.access_rights())?;
         }
         Ok(AssociatedRegionRefMut::new(region, &self.pkey_guard.pkey))
     }
+}
+impl<'p> Drop for PkeyGuardRefMut<'p> {
+    fn drop(&mut self) {
+        println!("Resetting pkey {} access rights to default {:?}", self.pkey_guard.pkey.key(), self.pkey_guard.default_access_rights);
+        self.pkey_guard.pkey.set_access_rights(self.pkey_guard.default_access_rights).expect("Failed to reset pkey access rights");
+    }
+}
+
+pub struct PkeyGuard {
+    pkey: PKey,
+    default_access_rights: PkeyAccessRights,
 }
 
 impl PkeyGuard {
@@ -130,7 +142,7 @@ impl PkeyGuard {
         Ok(PkeyGuardRef::new(self))
     }
 
-    pub fn deref_mut(&mut self, access_rights: PkeyAccessRights) -> Result<PkeyGuardRefMut<'_>, super::MprotectError> {
+    pub fn deref_mut(&self, access_rights: PkeyAccessRights) -> Result<PkeyGuardRefMut<'_>, super::MprotectError> {
         self.pkey.set_access_rights(access_rights)?;
         Ok(PkeyGuardRefMut::new(self))
     }
