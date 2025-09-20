@@ -24,7 +24,10 @@ impl std::fmt::Display for RuntimeError {
 fn child_pkey_workloads() -> Result<(), RuntimeError> {
     let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
     let mut protected_mem = UnsafeProtectedRegion::<allocator::Mmap, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
-    protected_mem.set_pkey_and_permissions(AccessRights::READ_WRITE, &pkey).map_err(RuntimeError::MprotectError)?;
+
+    unsafe {
+        pkey.associate(&protected_mem, AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
+    }
 
     //let mut protected_mem = ProtectedMemory::<u32>::without_pkey(AccessRights::Read)?;
 
@@ -49,7 +52,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     let pkey2 = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
     println!("\t\tCreated another pkey {}", pkey2.key());
     let mut new_memory = UnsafeProtectedRegion::<allocator::Jmalloc, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
-    new_memory.set_pkey_and_permissions(AccessRights::READ_WRITE, &pkey2).map_err(RuntimeError::MprotectError)?;
+    unsafe {
+        pkey2.associate(&new_memory, AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
+    }
     println!("\tSet the value in pkey {} memory to 100", pkey2.key());
     *new_memory.as_mut() = 100;
     println!("\t\tValue in new memory: {}", *new_memory.as_ref());
@@ -59,7 +64,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     println!("\tAttempt to create another pkey and switch the existing memory to it");
     let pkey3 = PKey::new(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
     println!("\t\tCreated another pkey {}", pkey3.key());
-    protected_mem.set_pkey_and_permissions(AccessRights::READ, &pkey3).map_err(RuntimeError::MprotectError)?;
+    unsafe {
+        pkey3.associate(&protected_mem, AccessRights::READ).map_err(RuntimeError::MprotectError)?;
+    }
     println!("\tSwitched the existing memory (before: pkey {}, now: pkey {})", pkey.key(), pkey3.key());
 
     // Read from the memory region (should succeed)
@@ -238,13 +245,13 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
     let mut pkey = PkeyGuard::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
 
     {
-        let assoc = pkey.deref(PkeyAccessRights::DisableAccess).map_err(RuntimeError::MprotectError)?.associate_region_deref(&safe_mem);
+        let assoc = pkey.deref(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?.associate_region_deref(&safe_mem).map_err(RuntimeError::MprotectError)?;
         let value = assoc.read().map_err(RuntimeError::GuardError)?;
         println!("\tValue read via associated region deref(): {}", *value);
     }
 
     {
-        let mut assoc = pkey.deref_mut(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?.associate_region_deref_mut(&mut safe_mem);
+        let mut assoc = pkey.deref_mut(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?.associate_region_deref_mut(&mut safe_mem).map_err(RuntimeError::MprotectError)?;
         let mut value = assoc.write().map_err(RuntimeError::GuardError)?;
         *value = 42;
         println!("\tValue written via associated region deref(): {}", *value);

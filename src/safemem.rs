@@ -56,8 +56,10 @@ impl<A: allocator::Allocator<T>, T> ProtectedMemory<A, T> {
     /// succeeds.
     /// - `Err(MprotectError)`: An error if allocation fails.
     pub fn new_with_pkey(access_rights: AccessRights, pkey: &PKey) -> Result<Self, super::MprotectError> {
-        let mut memory = UnsafeProtectedRegion::new(access_rights)?;
-        memory.set_pkey_and_permissions(access_rights, pkey)?;
+        let memory = UnsafeProtectedRegion::new(access_rights)?;
+        unsafe {
+            pkey.associate(&memory, access_rights)?;
+        }
         Ok(Self { memory, pkey: Some(pkey.clone()), access_rights })
     }
 

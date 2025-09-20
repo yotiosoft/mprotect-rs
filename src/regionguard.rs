@@ -100,6 +100,14 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     pub fn access_rights(&self) -> AccessRights {
         self.access_rights.get()
     }
+
+    pub unsafe fn get_region(&self) -> &UnsafeProtectedRegion<A, T> {
+        &self.memory
+    }
+
+    pub fn get_region_len(&self) -> usize {
+        self.memory.len()
+    }
 }
 
 #[derive(Debug)]

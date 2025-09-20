@@ -85,56 +85,6 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
         Ok(())
     }
 
-    /// Changes the access rights of the memory region and associates it with
-    /// the specified protection key using the `pkey_mprotect` system call.
-    /// # Arguments
-    /// - `access_rights`: The new access rights to be set for the memory region
-    /// using `pkey_mprotect`.
-    /// - `pkey`: A reference to the `PKey` to be associated with
-    /// the memory region.
-    /// # Returns
-    /// - `Ok(())`: On successful change of access rights and association.
-    /// - `Err(MprotectError)`: If the `pkey_mprotect` system
-    fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: Option<u32>) -> Result<(), super::MprotectError> {
-        if let None = pkey_id {
-            return Err(super::MprotectError::NoPkeyAssociated);
-        }
-
-        let pkey_id = pkey_id.unwrap();
-        let ret = unsafe {
-            libc::syscall(
-                libc::SYS_pkey_mprotect,
-                ptr,
-                len,
-                access_rights.to_i32(),
-                pkey_id
-            )
-        };
-        if ret != 0 {
-            let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
-            return Err(super::MprotectError::PkeyMprotectFailed(err_no));
-        }
-        Ok(())
-    }
-
-    /// Changes the access rights of the memory region and associates it with
-    /// the specified protection key using the `pkey_mprotect` system call.
-    /// # Arguments
-    /// - `access_rights`: The new access rights to be set for the memory region
-    /// using `pkey_mprotect`.
-    /// - `pkey`: A reference to the `PKey` to be associated with
-    /// the memory region.
-    /// # Returns
-    /// - `Ok(())`: On successful change of access rights and association.
-    /// - `Err(MprotectError)`: If the `pkey_mprotect` system call fails
-    /// or if no protection key is associated with the memory region.
-    /// This method updates the internal state of the `UnsafeProtectedRegion`
-    /// instance to reflect the new protection key association.
-    pub fn set_pkey_and_permissions(&mut self, access_rights: AccessRights, pkey: &PKey) -> Result<(), super::MprotectError> {
-        self.pkey_id = Some(pkey.key());
-        Self::impl_pkey_mprotect(access_rights, self.ptr.as_ptr() as *mut libc::c_void, self.len, self.pkey_id)
-    }
-
     /// Returns a raw pointer to the allocated memory region.
     /// # Returns
     /// - A mutable raw pointer to the allocated memory region.
