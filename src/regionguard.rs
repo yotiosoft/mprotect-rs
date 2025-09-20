@@ -96,6 +96,10 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
             access_rights: Rc::clone(&self.access_rights),
         })
     }
+
+    pub fn access_rights(&self) -> AccessRights {
+        self.access_rights.get()
+    }
 }
 
 #[derive(Debug)]

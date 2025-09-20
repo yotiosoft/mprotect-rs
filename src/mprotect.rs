@@ -130,7 +130,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// or if no protection key is associated with the memory region.
     /// This method updates the internal state of the `UnsafeProtectedRegion`
     /// instance to reflect the new protection key association.
-    pub fn set_pkey(&mut self, access_rights: AccessRights, pkey: &PKey) -> Result<(), super::MprotectError> {
+    pub fn set_pkey_and_permissions(&mut self, access_rights: AccessRights, pkey: &PKey) -> Result<(), super::MprotectError> {
         self.pkey_id = Some(pkey.key());
         Self::impl_pkey_mprotect(access_rights, self.ptr.as_ptr() as *mut libc::c_void, self.len, self.pkey_id)
     }
