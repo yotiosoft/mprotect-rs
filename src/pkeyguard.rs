@@ -15,7 +15,7 @@ where
     Rights: Access,
 {
     region: &'r mut RegionGuard<A, T>,
-    pkey_guard: &'p PkeyGuard,
+    pkey_guard: &'p PkeyGuard<T>,
     _rights: std::marker::PhantomData<Rights>,
 }
 
@@ -23,7 +23,7 @@ impl<'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'r, 'p, A, 
 where
     Rights: Access,
 {
-    pub fn new(region: &'r mut RegionGuard<A, T>, pkey_guard: &'p PkeyGuard) -> Self {
+    pub fn new(region: &'r mut RegionGuard<A, T>, pkey_guard: &'p PkeyGuard<T>) -> Self {
         pkey_guard.associated_count.set(pkey_guard.associated_count.get() + 1);
         AssociatedRegion { region, pkey_guard, _rights: std::marker::PhantomData }
     }
@@ -48,13 +48,14 @@ where
     }
 }
 
-pub struct PkeyGuard {
+pub struct PkeyGuard<T> {
     pkey: PKey,
     default_access_rights: PkeyAccessRights,
     associated_count: Cell<usize>,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl PkeyGuard {
+impl<T> PkeyGuard<T> {
     pub fn new(default_access_rights: PkeyAccessRights) -> Result<Self, super::MprotectError> {
         let pkey = PKey::new(default_access_rights)?;
         Ok(
@@ -62,6 +63,7 @@ impl PkeyGuard {
                 pkey,
                 default_access_rights,
                 associated_count: Cell::new(0),
+                _marker: std::marker::PhantomData,
             }
         )
     }
@@ -70,7 +72,7 @@ impl PkeyGuard {
         &self.pkey
     }
 
-    pub fn associate<'r, A: allocator::Allocator<T>, T, Rights>(&self, region: &'r mut RegionGuard<A, T>) -> Result<AssociatedRegion<'r, '_, A, T, Rights>, super::MprotectError>
+    pub fn associate<'r, Rights>(&self, region: &'r mut RegionGuard<impl allocator::Allocator<T>, T>) -> Result<AssociatedRegion<'r, '_, impl allocator::Allocator<T>, T, Rights>, super::MprotectError>
     where
         Rights: Access,
     {
