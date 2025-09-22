@@ -11,13 +11,19 @@ mod access_rights;
 pub use access_rights::permissions as PkeyPermissions;
 pub use PkeyPermissions::{ ReadOnly, ReadWrite, NoAccess };
 
+#[derive(Debug)]
+pub enum PkeyGuardError {
+    MprotectError(super::MprotectError),
+    RegionGuardError(GuardError),
+}
+
 pub struct AssociatedRegion<'p, A: allocator::Allocator<T>, T, Rights>
 where 
     Rights: access_rights::Access,
 {
     region: *mut RegionGuard<A, T>,
     pkey_guard: &'p PkeyGuard<A, T>,
-    _marker: std::marker::PhantomData<Rights>,
+    access_rights: Rights,
 }
 
 impl<'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'p, A, T, Rights>
@@ -28,25 +34,36 @@ where
         AssociatedRegion { 
             region, 
             pkey_guard, 
-            _marker: std::marker::PhantomData,
+            access_rights: Rights::new(),
         }
     }
 
-    pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> 
+    fn sync_pkey_permissions(&self) -> Result<(), super::MprotectError> {
+        if self.pkey_guard.current_access_rights.get() == self.access_rights.value() {
+            return Ok(());
+        }
+        self.pkey_guard.pkey.set_access_rights(self.access_rights.value())?;
+        self.pkey_guard.current_access_rights.set(self.access_rights.value());
+        Ok(())
+    }
+
+    pub fn read(&self) -> Result<GuardRef<'_, A, T>, PkeyGuardError>
     where 
         Rights: access_rights::CanRead,
     {
-        unsafe { (*self.region).read() }
+        self.sync_pkey_permissions().map_err(PkeyGuardError::MprotectError)?;
+        unsafe { (*self.region).read().map_err(PkeyGuardError::RegionGuardError) }
     }
 
-    pub fn write(&mut self) -> Result<GuardRefMut<'_, A, T>, GuardError>
+    pub fn write(&self) -> Result<GuardRefMut<'_, A, T>, PkeyGuardError>
     where
         Rights: access_rights::CanWrite,
     {
-        unsafe { (*self.region).write() }
+        self.sync_pkey_permissions().map_err(PkeyGuardError::MprotectError)?;
+        unsafe { (*self.region).write().map_err(PkeyGuardError::RegionGuardError) }
     }
 
-    pub fn set_access_rights<NewRights: access_rights::Access>(self) -> Result<AssociatedRegion<'p, A, T, NewRights>, super::MprotectError> 
+    pub fn set_access_rights<NewRights: access_rights::Access>(&self) -> Result<AssociatedRegion<'p, A, T, NewRights>, super::MprotectError> 
     where
         NewRights: access_rights::Access,
     {
@@ -57,7 +74,7 @@ where
         Ok(AssociatedRegion {
             region: self.region,
             pkey_guard: self.pkey_guard,
-            _marker: std::marker::PhantomData,
+            access_rights: NewRights::new(),
         })
     }
 }
@@ -87,6 +104,7 @@ pub struct PkeyGuard<A, T> {
     pkey: PKey,
     ref_counter: Cell<u32>,
     default_access_rights: PkeyAccessRights,
+    current_access_rights: Cell<PkeyAccessRights>,
     _marker: std::marker::PhantomData<(A, T)>,
 }
 
@@ -98,6 +116,7 @@ impl<A, T> PkeyGuard<A, T> {
                 pkey,
                 ref_counter: Cell::new(0),
                 default_access_rights: default_access_rights.value(),
+                current_access_rights: Cell::new(default_access_rights.value()),
                 _marker: std::marker::PhantomData,
             }
         )
@@ -107,7 +126,7 @@ impl<A, T> PkeyGuard<A, T> {
         &self.pkey
     }
 
-    pub fn associate<Rights>(&mut self, region: &mut RegionGuard<A, T>) -> Result<AssociatedRegion<'_, A, T, Rights>, super::MprotectError>
+    pub fn associate<Rights>(&self, region: &mut RegionGuard<A, T>) -> Result<AssociatedRegion<'_, A, T, Rights>, super::MprotectError>
     where
         A: allocator::Allocator<T>,
         Rights: access_rights::Access,
