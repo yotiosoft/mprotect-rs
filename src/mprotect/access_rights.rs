@@ -102,47 +102,42 @@ pub mod access_permissions {
 
     pub trait ReadAllowedTrait: AccessPermission {}
     pub mod read_allowed {
-        pub use super::*;
-        impl ReadAllowedTrait for ReadOnly {}
-        impl ReadAllowedTrait for ReadWrite {}
-        impl ReadAllowedTrait for ReadExecute {}
-        impl ReadAllowedTrait for ReadWriteExecute {}
+        impl super::ReadAllowedTrait for super::ReadOnly {}
+        impl super::ReadAllowedTrait for super::ReadWrite {}
+        impl super::ReadAllowedTrait for super::ReadExecute {}
+        impl super::ReadAllowedTrait for super::ReadWriteExecute {}
     }
 
     pub trait WriteAllowedTrait: AccessPermission {}
     pub mod write_allowed {
-        pub use super::*;
-        impl WriteAllowedTrait for WriteOnly {}
-        impl WriteAllowedTrait for ReadWrite {}
-        impl WriteAllowedTrait for WriteExecute {}
-        impl WriteAllowedTrait for ReadWriteExecute {}
+        impl super::WriteAllowedTrait for super::WriteOnly {}
+        impl super::WriteAllowedTrait for super::ReadWrite {}
+        impl super::WriteAllowedTrait for super::WriteExecute {}
+        impl super::WriteAllowedTrait for super::ReadWriteExecute {}
     }
 
     pub trait ExecuteAllowedTrait: AccessPermission {}
     pub mod execute_allowed {
-        pub use super::*;
-        impl ExecuteAllowedTrait for ExecuteOnly {}
-        impl ExecuteAllowedTrait for ReadExecute {}
-        impl ExecuteAllowedTrait for WriteExecute {}
-        impl ExecuteAllowedTrait for ReadWriteExecute {}
+        impl super::ExecuteAllowedTrait for super::ExecuteOnly {}
+        impl super::ExecuteAllowedTrait for super::ReadExecute {}
+        impl super::ExecuteAllowedTrait for super::WriteExecute {}
+        impl super::ExecuteAllowedTrait for super::ReadWriteExecute {}
     }
 
     pub trait NoAccessAllowedTrait: AccessPermission {}
     pub mod no_access {
-        pub use super::*;
-        impl NoAccessAllowedTrait for NoAccess {}
+        impl super::NoAccessAllowedTrait for super::NoAccess {}
     }
 
     pub trait AllAccessesTrait { fn value(&self) -> AccessRights; }
     pub mod all_accesses {
-        pub use super::*;
-        impl AllAccessesTrait for NoAccess { fn value(&self) -> AccessRights { AccessRights::NONE } }
-        impl AllAccessesTrait for ReadOnly { fn value(&self) -> AccessRights { AccessRights::READ } }
-        impl AllAccessesTrait for WriteOnly { fn value(&self) -> AccessRights { AccessRights::WRITE } }
-        impl AllAccessesTrait for ExecuteOnly { fn value(&self) -> AccessRights { AccessRights::EXEC } }
-        impl AllAccessesTrait for ReadWrite { fn value(&self) -> AccessRights { AccessRights::READ_WRITE } }
-        impl AllAccessesTrait for ReadExecute { fn value(&self) -> AccessRights { AccessRights::READ_EXEC } }
-        impl AllAccessesTrait for WriteExecute { fn value(&self) -> AccessRights { AccessRights::WRITE_EXEC } }
-        impl AllAccessesTrait for ReadWriteExecute { fn value(&self) -> AccessRights { AccessRights::READ_WRITE_EXEC } }
+        impl super::AllAccessesTrait for super::NoAccess { fn value(&self) -> super::AccessRights { super::AccessRights::NONE } }
+        impl super::AllAccessesTrait for super::ReadOnly { fn value(&self) -> super::AccessRights { super::AccessRights::READ } }
+        impl super::AllAccessesTrait for super::WriteOnly { fn value(&self) -> super::AccessRights { super::AccessRights::WRITE } }
+        impl super::AllAccessesTrait for super::ExecuteOnly { fn value(&self) -> super::AccessRights { super::AccessRights::EXEC } }
+        impl super::AllAccessesTrait for super::ReadWrite { fn value(&self) -> super::AccessRights { super::AccessRights::READ_WRITE } }
+        impl super::AllAccessesTrait for super::ReadExecute { fn value(&self) -> super::AccessRights { super::AccessRights::READ_EXEC } }
+        impl super::AllAccessesTrait for super::WriteExecute { fn value(&self) -> super::AccessRights { super::AccessRights::WRITE_EXEC } }
+        impl super::AllAccessesTrait for super::ReadWriteExecute { fn value(&self) -> super::AccessRights { super::AccessRights::READ_WRITE_EXEC } }
     }
 }

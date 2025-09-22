@@ -170,7 +170,7 @@ fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
 }
 
 fn child_regionguard_workloads() -> Result<(), RuntimeError> {
-    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(NoAccessAllowed::NoAccess).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
 
     {
         println!("\tCreated RegionGuard with ReadWrite access (should succeed)");
@@ -228,12 +228,12 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
 
     {
         println!("\tUsing dereference to read the value (should succeed)");
-        let value = safe_mem.deref(ReadAllowed::ReadOnly).map_err(RuntimeError::GuardError)?;
+        let value = safe_mem.deref(AccessPermissions::ReadOnly).map_err(RuntimeError::GuardError)?;
         println!("\t\tValue read via deref(): {}", *value);
         drop(value);
 
         println!("\tUsing dereference to write the value 512 (should succeed)");
-        let mut value = safe_mem.deref_mut(WriteAllowed::ReadWrite).map_err(RuntimeError::GuardError)?;
+        let mut value = safe_mem.deref_mut(AccessPermissions::ReadWrite).map_err(RuntimeError::GuardError)?;
         *value = 512;
         println!("\t\tValue written via deref(): {}", *value);
         drop(value);
@@ -243,8 +243,8 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
 }
 
 fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
-    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(NoAccessAllowed::ReadWrite).map_err(RuntimeError::MprotectError)?;
-    let mut safe_mem2 = RegionGuard::<allocator::Mmap, u32>::new(NoAccessAllowed::ReadWrite).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem2 = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
     let pkey = PkeyGuard::new(PkeyPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
 
     let assoc_for_mem = pkey.associate::<PkeyPermissions::NoAccess>(&mut safe_mem).map_err(RuntimeError::MprotectError)?;
