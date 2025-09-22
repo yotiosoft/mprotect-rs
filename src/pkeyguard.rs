@@ -5,7 +5,6 @@ use crate::GuardRefMut;
 use crate::GuardError;
 use crate::allocator;
 
-use std::rc::Rc;
 use std::cell::Cell;
 
 mod access_rights;
@@ -86,7 +85,7 @@ where
 
 pub struct PkeyGuard<A, T> {
     pkey: PKey,
-    ref_counter: Rc<Cell<u32>>,
+    ref_counter: Cell<u32>,
     default_access_rights: PkeyAccessRights,
     _marker: std::marker::PhantomData<(A, T)>,
 }
@@ -97,7 +96,7 @@ impl<A, T> PkeyGuard<A, T> {
         Ok(
             PkeyGuard {
                 pkey,
-                ref_counter: Rc::new(Cell::new(0)),
+                ref_counter: Cell::new(0),
                 default_access_rights: default_access_rights.value(),
                 _marker: std::marker::PhantomData,
             }
