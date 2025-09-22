@@ -4,12 +4,6 @@ pub use pkey::*;
 mod mprotect;
 pub use mprotect::*;
 
-mod safemem;
-pub use safemem::*;
-
-mod safeguard;
-pub use safeguard::*;
-
 mod pkeyguard;
 pub use pkeyguard::*;
 

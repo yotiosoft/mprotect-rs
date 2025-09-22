@@ -6,7 +6,6 @@ use std::os::unix::process::ExitStatusExt;
 #[derive(Debug)]
 enum RuntimeError {
     MprotectError(MprotectError),
-    ProtectedMemoryError(ProtectedMemoryError),
     GuardError(GuardError),
     PkeyGuardError(PkeyGuardError),
     UnexpectedSuccess,  // For cases where we expect a failure but got success
@@ -15,7 +14,6 @@ impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RuntimeError::MprotectError(e) => write!(f, "MprotectError: {}", e),
-            RuntimeError::ProtectedMemoryError(e) => write!(f, "ProtectedMemoryError: {}", e),
             RuntimeError::GuardError(e) => write!(f, "GuardError: {}", e),
             RuntimeError::PkeyGuardError(e) => write!(f, "PkeyGuardError: {:?}", e),
             RuntimeError::UnexpectedSuccess => write!(f, "Operation succeeded unexpectedly"),
@@ -91,80 +89,6 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     println!("\tAttempt to read the value again (this will likely cause a segmentation fault!)");
     println!("\t\tValue read: {}", *protected_mem.as_ref());
     println!("\t\tReading succeeded (this is unexpected!)");
-
-    Err(RuntimeError::UnexpectedSuccess)
-}
-
-fn child_safe_protected_memory() -> Result<(), RuntimeError> {
-    let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-    let mut safe_mem = ProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::READ_WRITE, &pkey).map_err(RuntimeError::MprotectError)?;
-
-    // Write to the protected memory
-    println!("\tAttempt to write the value 42");
-    {
-        let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
-        *guard = 42;
-    }
-    {
-        let guard = safe_mem.read().map_err(RuntimeError::ProtectedMemoryError)?;
-        println!("\tValue written: {}", *guard);
-    }
-    println!("\t\tWriting succeeded");
-
-    // Set the pkey to read-only
-    //protected_mem.pkey_mprotect(AccessRights::Read)?;
-    println!("\tSet pkey {} to read-only", pkey.key());
-    pkey.set_access_rights(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
-
-    // Write to the protected memory (should fail)
-    println!("\tAttempt to read the value");
-    {
-        let guard = safe_mem.read().map_err(RuntimeError::ProtectedMemoryError)?;
-        println!("\tValue read: {}", *guard);
-    }
-    println!("\t\tReading succeeded");
-    println!("\tAttempt to write the value 84 (this should fail)");
-    {
-        let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
-        *guard = 84;
-    }
-    println!("\t\tWriting succeeded (this is unexpected!)");
-
-    Err(RuntimeError::UnexpectedSuccess)
-}
-
-fn child_safe_guarded_pkey() -> Result<(), RuntimeError> {
-    let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-    let mut safe_mem = ProtectedMemory::<allocator::Mmap, u32>::new_with_pkey(AccessRights::READ_WRITE, &pkey).map_err(RuntimeError::MprotectError)?;
-
-    {
-        println!("\tCreating GuardedPKey to set pkey to DisableWrite");
-        let _guarded_pkey = GuardedPKey::new(&pkey, PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
-        println!("\tAttempt to read the value (should succeed)");
-        {
-            let guard = safe_mem.read().map_err(RuntimeError::ProtectedMemoryError)?;
-            println!("\t\tValue read: {}", *guard);
-        }
-
-        {   // This inner scope is to test nested GuardedPKey. The rights will be EnableAccessWrite here.
-            println!("\tCreating GuardedPKey to set pkey to EnableAccessWrite");
-            let _inner_guarded_pkey = GuardedPKey::new(&pkey, PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
-            println!("\tAttempt to write the value 84 (should succeed)");
-            {
-                let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
-                *guard = 84;
-                println!("\t\tValue written: {}", *guard);
-            }
-        }   // End of the inner scope. The rights should revert back to DisableWrite here.
-
-        println!("\tOut of inner GuardedPKey scope, pkey should be back to DisableWrite");
-        println!("\tAttempt to write the value 168 (should fail)");
-        {
-            let mut guard = safe_mem.write().map_err(RuntimeError::ProtectedMemoryError)?;
-            *guard = 168;
-            println!("\tValue written: {}", *guard);
-        }
-    }
 
     Err(RuntimeError::UnexpectedSuccess)
 }
@@ -346,14 +270,6 @@ fn main() -> Result<(), RuntimeError> {
         println!("Child process started with PID {}", std::process::id());
         child_pkey_workloads()?;      // This function handles its own errors and panics on failure
         println!("Child process finished without segmentation fault (this is unexpected!)");
-    } else if args.len() > 1 && args[1] == "--safe" {
-        println!("Child process started with PID {}", std::process::id());
-        child_safe_protected_memory()?;      // This function handles its own errors and panics on failure
-        println!("Child process finished without segmentation fault");
-    } else if args.len() > 1 && args[1] == "--safe-guarded-pkey" {
-        println!("Child process started with PID {}", std::process::id());
-        child_safe_guarded_pkey()?;      // This function handles its own errors and panics on failure
-        println!("Child process finished without segmentation fault");
     } else if args.len() > 1 && args[1] == "--regionguard" {
         println!("Child process started with PID {}", std::process::id());
         child_regionguard_workloads()?;      // This function handles its own errors and panics
