@@ -18,7 +18,7 @@ where
 {
     region: &'r mut RegionGuard<A, T>,
     pkey_guard: &'p PkeyGuard<A, T>,
-    _rights: std::marker::PhantomData<Rights>,
+    permission: Rights,
 }
 
 impl<'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'r, 'p, A, T, Rights>
@@ -27,7 +27,11 @@ where
 {
     pub fn new(region: &'r mut RegionGuard<A, T>, pkey_guard: &'p PkeyGuard<A, T>) -> Self {
         pkey_guard.associated_count.set(pkey_guard.associated_count.get() + 1);
-        AssociatedRegion { region, pkey_guard, _rights: std::marker::PhantomData }
+        AssociatedRegion { 
+            region, 
+            pkey_guard, 
+            permission: Rights::new(),
+        }
     }
 
     pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> 
@@ -49,17 +53,17 @@ where
         NewRights: access_rights::Access,
     {
         self.pkey_guard.pkey.set_access_rights(NewRights::new().value())?;
+
         Ok(AssociatedRegion {
             region: self.region,
             pkey_guard: self.pkey_guard,
-            _rights: std::marker::PhantomData,
+            permission: NewRights::new(),
         })
     }
 }
 
 pub struct PkeyGuard<A, T> {
     pkey: PKey,
-    default_access_rights: PkeyAccessRights,
     associated_count: Cell<usize>,
     _marker: std::marker::PhantomData<(A, T)>,
 }
@@ -70,7 +74,6 @@ impl<A, T> PkeyGuard<A, T> {
         Ok(
             PkeyGuard {
                 pkey,
-                default_access_rights: default_access_rights.value(),
                 associated_count: Cell::new(0),
                 _marker: std::marker::PhantomData,
             }
@@ -81,7 +84,7 @@ impl<A, T> PkeyGuard<A, T> {
         &self.pkey
     }
 
-    pub fn associate<'r, Rights>(&self, region: &'r mut RegionGuard<A, T>) -> Result<AssociatedRegion<'r, '_, A, T, Rights>, super::MprotectError>
+    pub fn associate<'r, Rights>(&mut self, region: &'r mut RegionGuard<A, T>) -> Result<AssociatedRegion<'r, '_, A, T, Rights>, super::MprotectError>
     where
         A: allocator::Allocator<T>,
         Rights: access_rights::Access,
@@ -89,7 +92,9 @@ impl<A, T> PkeyGuard<A, T> {
         unsafe {
             self.pkey.associate(region.get_region(), region.access_rights())?;
         }
+
         self.pkey.set_access_rights(Rights::new().value())?;
+        
         Ok(AssociatedRegion::new(region, self))
     }
 }
