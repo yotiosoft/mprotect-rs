@@ -244,6 +244,7 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
     let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(NoAccessAllowed::ReadWrite).map_err(RuntimeError::MprotectError)?;
     let mut safe_mem2 = RegionGuard::<allocator::Mmap, u32>::new(NoAccessAllowed::ReadWrite).map_err(RuntimeError::MprotectError)?;
     let mut pkey = PkeyGuard::new(PkeyPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
+    let mut pkey2 = PkeyGuard::new(PkeyPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
 
     {
         let mut assoc_rw = pkey.associate::<PkeyPermissions::ReadWrite>(&mut safe_mem).map_err(RuntimeError::MprotectError)?;
@@ -278,18 +279,16 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
             let value = assoc_rw2.read().map_err(RuntimeError::GuardError)?;
             println!("\tValue read via associated region deref(): {}", *value);
         }
-    }
-    {
-        let assoc2 = pkey.associate::<PkeyPermissions::ReadWrite>(&mut safe_mem2).map_err(RuntimeError::MprotectError)?;
+
+        let assoc2 = pkey2.associate::<PkeyPermissions::ReadWrite>(&mut safe_mem2).map_err(RuntimeError::MprotectError)?;
         {
             let value = assoc2.read().map_err(RuntimeError::GuardError)?;
             println!("\tValue read via second associated region deref(): {}", *value);
         }
-    }
-    {
-        let assoc = pkey.associate::<PkeyPermissions::ReadOnly>(&mut safe_mem).map_err(RuntimeError::MprotectError)?;
+
+        let assoc_r2 = assoc_rw2.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
         {
-            let value = assoc.read().map_err(RuntimeError::GuardError)?;
+            let value = assoc_r2.read().map_err(RuntimeError::GuardError)?;
             println!("\tValue read via associated region deref(): {}", *value);
         }
 
