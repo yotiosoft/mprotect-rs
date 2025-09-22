@@ -24,6 +24,7 @@ where
     region: *mut RegionGuard<A, T>,
     pkey_guard: &'p PkeyGuard<A, T>,
     access_rights: Rights,
+    generation: u32,
 }
 
 impl<'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'p, A, T, Rights>
@@ -35,6 +36,7 @@ where
             region, 
             pkey_guard, 
             access_rights: Rights::new(),
+            generation: 0,
         }
     }
 
@@ -70,11 +72,11 @@ where
         self.pkey_guard.pkey.set_access_rights(NewRights::new().value())?;
         println!("New PKey access rights set to {:?}", NewRights::new().value());
 
-        self.pkey_guard.ref_counter.set(self.pkey_guard.ref_counter.get() + 1);
         Ok(AssociatedRegion {
             region: self.region,
             pkey_guard: self.pkey_guard,
             access_rights: NewRights::new(),
+            generation: self.generation + 1,
         })
     }
 }
@@ -83,16 +85,13 @@ where
     Rights: access_rights::Access,
 {
     fn drop(&mut self) {
-        // If the reference count is greater than one, it means that there are other
-        // AssociatedRegion instances still using the same PKey. In this case, we do not
-        // reset the PKey access rights to the previous state.
-        println!("AssociatedRegion dropped, current reference count: {}", self.pkey_guard.ref_counter.get());
-        if self.pkey_guard.ref_counter.get() > 1 {
-            self.pkey_guard.ref_counter.set(self.pkey_guard.ref_counter.get() - 1);
+        // If the generation is greater than 0, it means there are other AssociatedRegion instances using the same PKey.
+        // In this case, we should not reset the PKey access rights to avoid affecting those instances.
+        if self.generation > 0 {
+            println!("Not resetting PKey access rights because there are other AssociatedRegion instances using the same PKey.");
             return;
         }
 
-        self.pkey_guard.ref_counter.set(0);
         self.pkey_guard.pkey.set_access_rights(self.pkey_guard.default_access_rights).unwrap_or_else(|e| {
             panic!("Failed to reset PKey access rights: {:?}", e);
         });
@@ -102,7 +101,6 @@ where
 
 pub struct PkeyGuard<A, T> {
     pkey: PKey,
-    ref_counter: Cell<u32>,
     default_access_rights: PkeyAccessRights,
     current_access_rights: Cell<PkeyAccessRights>,
     _marker: std::marker::PhantomData<(A, T)>,
@@ -114,7 +112,6 @@ impl<A, T> PkeyGuard<A, T> {
         Ok(
             PkeyGuard {
                 pkey,
-                ref_counter: Cell::new(0),
                 default_access_rights: default_access_rights.value(),
                 current_access_rights: Cell::new(default_access_rights.value()),
                 _marker: std::marker::PhantomData,
@@ -136,7 +133,6 @@ impl<A, T> PkeyGuard<A, T> {
         }
 
         self.pkey.set_access_rights(Rights::new().value())?;
-        self.ref_counter.set(self.ref_counter.get() + 1);
         Ok(AssociatedRegion::new(region, self))
     }
 }
