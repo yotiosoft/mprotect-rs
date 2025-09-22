@@ -19,29 +19,29 @@ pub enum PkeyGuardError {
     InvalidRegionError,
 }
 
-pub struct AssociatedRegion<A: allocator::Allocator<T>, T, Rights>
+pub struct AssociatedRegion<'p, A: allocator::Allocator<T>, T, Rights>
 where 
     Rights: access_rights::Access,
 {
     region: *mut RegionGuard<A, T>,
-    pkey_guard: Option<PkeyGuard<A, T>>,
+    pkey_guard: &'p PkeyGuard<A, T>,
     access_rights: Rights,
     generation: u32,
     popped: Cell<bool>,
 }
 
-impl<A: allocator::Allocator<T>, T, Rights> AssociatedRegion<A, T, Rights>
+impl<'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'p, A, T, Rights>
 where
     Rights: access_rights::Access,
 {
-    pub fn new(region: &mut RegionGuard<A, T>, pkey_guard: PkeyGuard<A, T>) -> Self {
+    pub fn new(region: &mut RegionGuard<A, T>, pkey_guard: &'p PkeyGuard<A, T>) -> Self {
         let access_rights = Rights::new();
         // push new access rights to stack
         pkey_guard.push_permissions(access_rights.value());
 
         AssociatedRegion {
             region,
-            pkey_guard: Some(pkey_guard),
+            pkey_guard,
             access_rights,
             generation: 0,
             popped: Cell::new(false),
@@ -49,13 +49,13 @@ where
     }
 
     fn sync_pkey_permissions(&self) -> Result<(), super::MprotectError> {
-        if self.pkey_guard.as_ref().unwrap().current_access_rights.get() == self.access_rights.value() {
+        if self.pkey_guard.current_access_rights.get() == self.access_rights.value() {
             return Ok(());
         }
         unsafe {
-            self.pkey_guard.as_ref().unwrap().pkey.set_access_rights(self.access_rights.value())?;
+            self.pkey_guard.pkey.set_access_rights(self.access_rights.value())?;
         }
-        self.pkey_guard.as_ref().unwrap().current_access_rights.set(self.access_rights.value());
+        self.pkey_guard.current_access_rights.set(self.access_rights.value());
         Ok(())
     }
 
@@ -83,43 +83,39 @@ where
         unsafe { (*self.region).write().map_err(PkeyGuardError::RegionGuardError) }
     }
 
-    pub fn set_access_rights<NewRights: access_rights::Access>(mut self) -> Result<AssociatedRegion<A, T, NewRights>, super::MprotectError> 
+    pub fn set_access_rights<NewRights: access_rights::Access>(&self) -> Result<AssociatedRegion<'p, A, T, NewRights>, super::MprotectError> 
     where
         NewRights: access_rights::Access,
     {
         unsafe {
-            self.pkey_guard.as_ref().unwrap().pkey.set_access_rights(NewRights::new().value())?;
+            self.pkey_guard.pkey.set_access_rights(NewRights::new().value())?;
         }
         println!("New PKey access rights set to {:?}", NewRights::new().value());
 
         self.popped.set(true);
-        // pop current access rights from stack
-        self.pkey_guard.as_ref().unwrap().pop_permissions();
         // push new access rights to stack
-        self.pkey_guard.as_ref().unwrap().push_permissions(NewRights::new().value());
-
-        let pkey_guard = self.pkey_guard.take().unwrap();
+        self.pkey_guard.push_permissions(NewRights::new().value());
 
         Ok(AssociatedRegion {
             region: self.region,
-            pkey_guard: Some(pkey_guard),
+            pkey_guard: self.pkey_guard,
             access_rights: NewRights::new(),
             generation: self.generation + 1,
             popped: Cell::new(false),
         })
     }
 }
-impl <A: allocator::Allocator<T>, T, Rights> Drop for AssociatedRegion<A, T, Rights>
+impl <'r, 'p, A: allocator::Allocator<T>, T, Rights> Drop for AssociatedRegion<'p, A, T, Rights>
 where 
     Rights: access_rights::Access,
 {
     fn drop(&mut self) {
         if !self.popped.get() {
             // pop current access rights from stack
-            self.pkey_guard.as_ref().unwrap().pop_permissions();
+            self.pkey_guard.pop_permissions();
             self.popped.set(false);
         }
-        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.pkey_guard.as_ref().unwrap().current_access_rights.get());
+        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.pkey_guard.current_access_rights.get());
     }
 }
 
@@ -146,13 +142,15 @@ impl<A, T> PkeyGuard<A, T> {
     }
 
     fn pop_permissions(&self) -> Option<PkeyAccessRights> {
-        let popped = self.permissions_stack.take().pop();
+        let popped = self.permissions_stack.borrow_mut().pop();
 
         println!("[popped permissions: {:?}]", popped);
-        if let Some(&top) = self.permissions_stack.take().last() {
+
+        if let Some(top) = self.permissions_stack.borrow().last() {
+            let top = *top;
             println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), top);
             unsafe {
-                self.pkey.set_access_rights(top).unwrap();
+                self.pkey.set_access_rights(top).expect("Failed to set pkey access rights");
             }
             self.current_access_rights.set(top);
         }
@@ -166,7 +164,7 @@ impl<A, T> PkeyGuard<A, T> {
         println!("[pushed permissions: {:?}]", rights);
         println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), rights);
         unsafe {
-            self.pkey.set_access_rights(rights).unwrap();
+            self.pkey.set_access_rights(rights).expect("Failed to set pkey access rights");
         }
         self.current_access_rights.set(rights);
     }
@@ -175,7 +173,7 @@ impl<A, T> PkeyGuard<A, T> {
         &self.pkey
     }
 
-    pub fn associate<Rights>(self, region: &mut RegionGuard<A, T>) -> Result<AssociatedRegion<A, T, Rights>, super::MprotectError>
+    pub fn associate<Rights>(&self, region: &mut RegionGuard<A, T>) -> Result<AssociatedRegion<'_, A, T, Rights>, super::MprotectError>
     where
         A: allocator::Allocator<T>,
         Rights: access_rights::Access,
