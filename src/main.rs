@@ -219,7 +219,8 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
         println!("\tValue read via second associated region deref(): {}", *value);
 
         {
-            let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;
+            // /let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;   // <- segmentation fault occurs here
+            let assoc2_r = assoc2_rw.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;
             let value = assoc2_r.read().map_err(RuntimeError::PkeyGuardError)?;
             println!("\tValue read via second associated region deref(): {}", *value);
         }

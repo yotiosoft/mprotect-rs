@@ -25,6 +25,7 @@ where
     region: *mut RegionGuard<A, T>,
     pkey_guard: &'p PkeyGuard<A, T>,
     access_rights: Rights,
+    before_access_rights: PkeyAccessRights,
     generation: u32,
 }
 
@@ -37,6 +38,7 @@ where
             region, 
             pkey_guard, 
             access_rights: Rights::new(),
+            before_access_rights: Rights::new().value(),
             generation: 0,
         }
     }
@@ -59,7 +61,7 @@ where
         if self.region.is_null() {
             return Err(PkeyGuardError::InvalidRegionError);
         }
-
+        
         self.sync_pkey_permissions().map_err(PkeyGuardError::MprotectError)?;
         unsafe { (*self.region).read().map_err(PkeyGuardError::RegionGuardError) }
     }
@@ -90,6 +92,7 @@ where
             pkey_guard: self.pkey_guard,
             access_rights: NewRights::new(),
             generation: self.generation + 1,
+            before_access_rights: self.access_rights.value(),
         })
     }
 }
@@ -98,19 +101,12 @@ where
     Rights: access_rights::Access,
 {
     fn drop(&mut self) {
-        // If the generation is greater than 0, it means there are other AssociatedRegion instances using the same PKey.
-        // In this case, we should not reset the PKey access rights to avoid affecting those instances.
-        if self.generation > 0 {
-            println!("Not resetting PKey access rights because there are other AssociatedRegion instances using the same PKey.");
-            return;
-        }
-
         unsafe {
-            self.pkey_guard.pkey.set_access_rights(self.pkey_guard.default_access_rights).unwrap_or_else(|e| {
+            self.pkey_guard.pkey.set_access_rights(self.before_access_rights).unwrap_or_else(|e| {
                 panic!("Failed to reset PKey access rights: {:?}", e);
             });
         }
-        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}",self.pkey_guard.default_access_rights);
+        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.before_access_rights);
     }
 }
 
