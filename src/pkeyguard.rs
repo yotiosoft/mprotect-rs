@@ -6,6 +6,7 @@ use crate::GuardError;
 use crate::allocator;
 
 use std::cell::Cell;
+use std::cell::RefCell;
 
 mod access_rights;
 pub use access_rights::permissions as PkeyPermissions;
@@ -25,8 +26,8 @@ where
     region: *mut RegionGuard<A, T>,
     pkey_guard: &'p PkeyGuard<A, T>,
     access_rights: Rights,
-    before_access_rights: PkeyAccessRights,
     generation: u32,
+    popped: Cell<bool>,
 }
 
 impl<'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'p, A, T, Rights>
@@ -34,12 +35,16 @@ where
     Rights: access_rights::Access,
 {
     pub fn new(region: &mut RegionGuard<A, T>, pkey_guard: &'p PkeyGuard<A, T>) -> Self {
-        AssociatedRegion { 
-            region, 
-            pkey_guard, 
-            access_rights: Rights::new(),
-            before_access_rights: Rights::new().value(),
+        let access_rights = Rights::new();
+        // push new access rights to stack
+        pkey_guard.push_permissions(access_rights.value());
+
+        AssociatedRegion {
+            region,
+            pkey_guard,
+            access_rights,
             generation: 0,
+            popped: Cell::new(false),
         }
     }
 
@@ -78,7 +83,7 @@ where
         unsafe { (*self.region).write().map_err(PkeyGuardError::RegionGuardError) }
     }
 
-    pub fn set_access_rights<NewRights: access_rights::Access>(&self) -> Result<AssociatedRegion<'p, A, T, NewRights>, super::MprotectError> 
+    pub fn set_access_rights<NewRights: access_rights::Access>(&mut self) -> Result<AssociatedRegion<'p, A, T, NewRights>, super::MprotectError> 
     where
         NewRights: access_rights::Access,
     {
@@ -87,12 +92,18 @@ where
         }
         println!("New PKey access rights set to {:?}", NewRights::new().value());
 
+        self.popped.set(true);
+        // pop current access rights from stack
+        self.pkey_guard.pop_permissions();
+        // push new access rights to stack
+        self.pkey_guard.push_permissions(NewRights::new().value());
+
         Ok(AssociatedRegion {
             region: self.region,
             pkey_guard: self.pkey_guard,
             access_rights: NewRights::new(),
             generation: self.generation + 1,
-            before_access_rights: self.access_rights.value(),
+            popped: Cell::new(false),
         })
     }
 }
@@ -101,19 +112,19 @@ where
     Rights: access_rights::Access,
 {
     fn drop(&mut self) {
-        unsafe {
-            self.pkey_guard.pkey.set_access_rights(self.before_access_rights).unwrap_or_else(|e| {
-                panic!("Failed to reset PKey access rights: {:?}", e);
-            });
+        if !self.popped.get() {
+            // pop current access rights from stack
+            self.pkey_guard.pop_permissions();
+            self.popped.set(false);
         }
-        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.before_access_rights);
+        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.pkey_guard.current_access_rights.get());
     }
 }
 
 pub struct PkeyGuard<A, T> {
     pkey: PKey,
-    default_access_rights: PkeyAccessRights,
     current_access_rights: Cell<PkeyAccessRights>,
+    permissions_stack: RefCell<Vec<PkeyAccessRights>>,
     _marker: std::marker::PhantomData<(A, T)>,
 }
 
@@ -125,11 +136,37 @@ impl<A, T> PkeyGuard<A, T> {
         Ok(
             PkeyGuard {
                 pkey,
-                default_access_rights: default_access_rights.value(),
                 current_access_rights: Cell::new(default_access_rights.value()),
+                permissions_stack: RefCell::new(vec![default_access_rights.value()]),
                 _marker: std::marker::PhantomData,
             }
         )
+    }
+
+    fn pop_permissions(&self) -> Option<PkeyAccessRights> {
+        let popped = self.permissions_stack.take().pop();
+
+        println!("[popped permissions: {:?}]", popped);
+        if let Some(&top) = self.permissions_stack.take().last() {
+            println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), top);
+            unsafe {
+                self.pkey.set_access_rights(top).unwrap();
+            }
+            self.current_access_rights.set(top);
+        }
+
+        popped
+    }
+
+    fn push_permissions(&self, rights: PkeyAccessRights) {
+        self.permissions_stack.borrow_mut().push(rights);
+
+        println!("[pushed permissions: {:?}]", rights);
+        println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), rights);
+        unsafe {
+            self.pkey.set_access_rights(rights).unwrap();
+        }
+        self.current_access_rights.set(rights);
     }
 
     pub fn pkey(&self) -> &PKey {
