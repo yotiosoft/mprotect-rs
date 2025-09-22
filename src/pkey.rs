@@ -45,14 +45,12 @@ impl PKey {
     /// - `Ok(PKey)`: A new `PKey` instance if allocation
     /// succeeds.
     /// - `Err(MprotectError)`: An error if allocation fails.
-    pub fn new(access: PkeyAccessRights) -> Result<Self, super::MprotectError> {
-        let key = unsafe {
-            libc::syscall(
-                libc::SYS_pkey_alloc,
-                0,                  // Flags. According to the man page, this is reserved for future use and currently must be 0.
-                access,             // Initial access rights
-            )
-        };
+    pub unsafe fn new(access: PkeyAccessRights) -> Result<Self, super::MprotectError> {
+        let key = libc::syscall(
+            libc::SYS_pkey_alloc,
+            0,                  // Flags. According to the man page, this is reserved for future use and currently must be 0.
+            access,             // Initial access rights
+        );
 
         if key < 0 {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
@@ -66,10 +64,9 @@ impl PKey {
     /// This method reads the PKRU register to determine the access rights associated with the key.
     /// # Returns
     /// - The current access rights of the protection key.
-    pub fn get_access_rights(&self) -> PkeyAccessRights {
-        let pkru_value = unsafe {
-            pkru::rdpkru()
-        };
+    pub unsafe fn get_access_rights(&self) -> PkeyAccessRights {
+        let pkru_value = pkru::rdpkru();
+
         let rights_bits = (pkru_value >> (self.key * 2)) & 0b11;
         match rights_bits {
             0b00 => PkeyAccessRights::EnableAccessWrite,
@@ -87,20 +84,18 @@ impl PKey {
     /// # Returns
     /// - `Ok(())`: If the access rights are successfully updated.
     /// - `Err(MprotectError)`: If there is an error updating the access rights.
-    pub fn set_access_rights(&self, access: PkeyAccessRights) -> Result<(), super::MprotectError> {
-        let pkru_value = unsafe {
-            pkru::rdpkru()
-        };
+    pub unsafe fn set_access_rights(&self, access: PkeyAccessRights) -> Result<(), super::MprotectError> {
+        let pkru_value = pkru::rdpkru();
+
         let new_pkru_bits = match access {
             PkeyAccessRights::EnableAccessWrite => 0b00,
             PkeyAccessRights::DisableAccess => 0b01,
             PkeyAccessRights::DisableWrite => 0b10,
         } << (self.key * 2);
-        println!("Setting PKey {} access rights to {:?} (PKRU bits: {:02b})", self.key, access, new_pkru_bits >> (self.key * 2));
+        
         let new_pkru_value = pkru_value & !(0b11 << (self.key * 2)) | new_pkru_bits;
-        unsafe {
-            pkru::wrpkru(new_pkru_value);
-        }
+        pkru::wrpkru(new_pkru_value);
+        
         Ok(())
     }
 
@@ -121,20 +116,20 @@ impl PKey {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights and association.
     /// - `Err(MprotectError)`: If the `pkey_mprotect` system
-    fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: u32) -> Result<(), super::MprotectError> {
-        let ret = unsafe {
-            libc::syscall(
-                libc::SYS_pkey_mprotect,
-                ptr,
-                len,
-                access_rights.to_i32(),
-                pkey_id
-            )
-        };
+    unsafe fn impl_pkey_mprotect(access_rights: AccessRights, ptr: *mut libc::c_void, len: usize, pkey_id: u32) -> Result<(), super::MprotectError> {
+        let ret = libc::syscall(
+            libc::SYS_pkey_mprotect,
+            ptr,
+            len,
+            access_rights.to_i32(),
+            pkey_id
+        );
+
         if ret != 0 {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();
             return Err(super::MprotectError::PkeyMprotectFailed(err_no));
         }
+
         Ok(())
     }
 

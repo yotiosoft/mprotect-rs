@@ -15,6 +15,7 @@ pub use PkeyPermissions::{ ReadOnly, ReadWrite, NoAccess };
 pub enum PkeyGuardError {
     MprotectError(super::MprotectError),
     RegionGuardError(GuardError),
+    InvalidRegionError,
 }
 
 pub struct AssociatedRegion<'p, A: allocator::Allocator<T>, T, Rights>
@@ -44,7 +45,9 @@ where
         if self.pkey_guard.current_access_rights.get() == self.access_rights.value() {
             return Ok(());
         }
-        self.pkey_guard.pkey.set_access_rights(self.access_rights.value())?;
+        unsafe {
+            self.pkey_guard.pkey.set_access_rights(self.access_rights.value())?;
+        }
         self.pkey_guard.current_access_rights.set(self.access_rights.value());
         Ok(())
     }
@@ -53,6 +56,10 @@ where
     where 
         Rights: access_rights::CanRead,
     {
+        if self.region.is_null() {
+            return Err(PkeyGuardError::InvalidRegionError);
+        }
+
         self.sync_pkey_permissions().map_err(PkeyGuardError::MprotectError)?;
         unsafe { (*self.region).read().map_err(PkeyGuardError::RegionGuardError) }
     }
@@ -61,6 +68,10 @@ where
     where
         Rights: access_rights::CanWrite,
     {
+        if self.region.is_null() {
+            return Err(PkeyGuardError::InvalidRegionError);
+        }
+
         self.sync_pkey_permissions().map_err(PkeyGuardError::MprotectError)?;
         unsafe { (*self.region).write().map_err(PkeyGuardError::RegionGuardError) }
     }
@@ -69,7 +80,9 @@ where
     where
         NewRights: access_rights::Access,
     {
-        self.pkey_guard.pkey.set_access_rights(NewRights::new().value())?;
+        unsafe {
+            self.pkey_guard.pkey.set_access_rights(NewRights::new().value())?;
+        }
         println!("New PKey access rights set to {:?}", NewRights::new().value());
 
         Ok(AssociatedRegion {
@@ -92,9 +105,11 @@ where
             return;
         }
 
-        self.pkey_guard.pkey.set_access_rights(self.pkey_guard.default_access_rights).unwrap_or_else(|e| {
-            panic!("Failed to reset PKey access rights: {:?}", e);
-        });
+        unsafe {
+            self.pkey_guard.pkey.set_access_rights(self.pkey_guard.default_access_rights).unwrap_or_else(|e| {
+                panic!("Failed to reset PKey access rights: {:?}", e);
+            });
+        }
         println!("Dropped AssociatedRegion, reset PKey access rights to {:?}",self.pkey_guard.default_access_rights);
     }
 }
@@ -108,7 +123,9 @@ pub struct PkeyGuard<A, T> {
 
 impl<A, T> PkeyGuard<A, T> {
     pub fn new<Access: access_rights::Access>(default_access_rights: Access) -> Result<Self, super::MprotectError> {
-        let pkey = PKey::new(default_access_rights.value())?;
+        let pkey = unsafe {
+            PKey::new(default_access_rights.value())?
+        };
         Ok(
             PkeyGuard {
                 pkey,
@@ -130,9 +147,8 @@ impl<A, T> PkeyGuard<A, T> {
     {
         unsafe {
             self.pkey.associate(region.get_region(), region.access_rights())?;
+            self.pkey.set_access_rights(Rights::new().value())?;
         }
-
-        self.pkey.set_access_rights(Rights::new().value())?;
         Ok(AssociatedRegion::new(region, self))
     }
 }

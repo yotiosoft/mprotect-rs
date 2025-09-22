@@ -22,7 +22,9 @@ impl std::fmt::Display for RuntimeError {
 }
 
 fn child_pkey_workloads() -> Result<(), RuntimeError> {
-    let pkey = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
+    let pkey = unsafe {
+        PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?
+    };
     let mut protected_mem = UnsafeProtectedRegion::<allocator::Mmap, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
 
     unsafe {
@@ -40,7 +42,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     // Set the pkey to read-only
     //protected_mem.pkey_mprotect(AccessRights::Read)?;
     println!("\tSet pkey {} to read-only", pkey.key());
-    pkey.set_access_rights(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
+    unsafe {
+        pkey.set_access_rights(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
+    }
 
     // Read from the protected memory
     println!("\tAttempt to read the value");
@@ -49,7 +53,10 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
     // Create another pkey and allocate another memory region with it
     println!("\tAttempt to create another pkey and allocate memory with it");
-    let pkey2 = PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?;
+    let pkey2 = unsafe {
+        PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?
+    };
+
     println!("\t\tCreated another pkey {}", pkey2.key());
     let mut new_memory = UnsafeProtectedRegion::<allocator::Jmalloc, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
     unsafe {
@@ -62,7 +69,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
     // Create another pkey and switch the pkey of the existing memory region to it
     println!("\tAttempt to create another pkey and switch the existing memory to it");
-    let pkey3 = PKey::new(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?;
+    let pkey3 = unsafe {
+        PKey::new(PkeyAccessRights::DisableWrite).map_err(RuntimeError::MprotectError)?
+    };
     println!("\t\tCreated another pkey {}", pkey3.key());
     unsafe {
         pkey3.associate(&protected_mem, AccessRights::READ).map_err(RuntimeError::MprotectError)?;
@@ -83,7 +92,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     // Set the pkey 1 to no access
     //protected_mem.pkey_mprotect(AccessRights::None)?;
     println!("\tSet pkey {} to no access", pkey.key());
-    pkey.set_access_rights(PkeyAccessRights::DisableAccess).map_err(RuntimeError::MprotectError)?;
+    unsafe {
+        pkey3.set_access_rights(PkeyAccessRights::DisableAccess).map_err(RuntimeError::MprotectError)?;
+    }
 
     // This will likely cause a segmentation fault
     println!("\tAttempt to read the value again (this will likely cause a segmentation fault!)");
@@ -204,8 +215,17 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
     }
     {
         let assoc2_rw = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
-        let value = assoc2_rw.read().map_err(RuntimeError::PkeyGuardError)?;
+        let mut value = assoc2_rw.write().map_err(RuntimeError::PkeyGuardError)?;
         println!("\tValue read via second associated region deref(): {}", *value);
+
+        {
+            let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;
+            let value = assoc2_r.read().map_err(RuntimeError::PkeyGuardError)?;
+            println!("\tValue read via second associated region deref(): {}", *value);
+        }
+
+        *value = 336;
+        println!("\tValue written via second associated region deref(): {}", *value);
     }
     {
         let assoc_r = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
@@ -248,12 +268,6 @@ fn parent_main() {
     
     println!("--- Testing Protection Key Workloads ---");
     handle_child_exit("--pkeys".to_string());
-
-    println!("--- Testing Safe Protected Memory Workloads ---");
-    handle_child_exit("--safe".to_string());
-
-    println!("--- Testing Safe Guarded Pkey Workloads ---");
-    handle_child_exit("--safe-guarded-pkey".to_string());
 
     println!("--- Testing RegionGuard Workloads ---");
     handle_child_exit("--regionguard".to_string());
