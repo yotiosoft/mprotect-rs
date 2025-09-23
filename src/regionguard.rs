@@ -29,7 +29,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
         self.generation.set(current_gen.wrapping_add(1));
     }
 
-    pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> {
+    pub fn read<'a>(&'a self) -> Result<GuardRef<'a, A, T>, GuardError> {
         if !self.access_rights.get().has(AccessRights::READ) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::READ));
             self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
@@ -37,7 +37,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
 
         let gen = self.generation.get();
         Ok(GuardRef {
-            ptr: self.memory.as_ref() as *const T,
+            ptr: self.memory.as_ref(),
             mem: &self.memory,
             gen,
             generation: Rc::clone(&self.generation),
@@ -46,7 +46,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
         })
     }
 
-    pub fn write(&mut self) -> Result<GuardRefMut<'_, A, T>, GuardError> {
+    pub fn write<'a>(&'a mut self) -> Result<GuardRefMut<'a, A, T>, GuardError> {
         if !self.access_rights.get().contains(AccessRights::WRITE) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::WRITE));
             self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
@@ -71,7 +71,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
         
         let gen = self.generation.get();
         Ok(GuardRef {
-            ptr: self.memory.as_ref() as *const T,
+            ptr: self.memory.as_ref(),
             mem: &self.memory,
             gen,
             generation: Rc::clone(&self.generation),
@@ -128,7 +128,7 @@ impl std::fmt::Display for GuardError {
 }
 
 pub struct GuardRef<'a, A: allocator::Allocator<T>, T> {
-    ptr: *const T,
+    ptr: &'a T,
     mem: &'a UnsafeProtectedRegion<A, T>,
     gen: u64,
     generation: Rc<Cell<u64>>,
@@ -146,7 +146,7 @@ impl<'a, A: allocator::Allocator<T>, T> GuardRef<'a, A, T> {
         F: FnOnce(&T) -> R,
     {
         if self.is_valid() {
-            unsafe { Ok(f(&*self.ptr)) }
+            Ok(f(&*self.ptr))
         } else {
             Err(GuardError::InvalidGeneration)
         }
@@ -157,7 +157,7 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRef<'a, A, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         if self.is_valid() {
-            unsafe { &*self.ptr }
+            &*self.ptr
         } else {
             panic!("Failed to deref GuardRef: invalid generation");
         }

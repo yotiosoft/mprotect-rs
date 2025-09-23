@@ -187,11 +187,14 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
 
     {
         let assoc_rw = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
-        let mut value = assoc_rw.write().map_err(RuntimeError::PkeyGuardError)?;
+        let mut value = assoc_rw.mut_ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         *value = 42;
         println!("\tValue written via associated region deref(): {}", *value);
+        *value = 84;
+        println!("\tValue rewritten via associated region deref(): {}", *value);
+        drop(value);        // drop here to release the mutable borrow for the next read
 
-        let value = assoc_rw.read().map_err(RuntimeError::PkeyGuardError)?;
+        let value = assoc_rw.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         println!("\tValue read via associated region deref(): {}", *value);
     }
     {
@@ -201,37 +204,35 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
         // *value = 42;
         //println!("\tValue written via associated region deref(): {}", *value);
 
-        let value = assoc_r.read().map_err(RuntimeError::PkeyGuardError)?;
+        let value = assoc_r.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         println!("\tValue read via associated region deref(): {}", *value);
     }
     {
         let assoc_rw = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
-        let mut value1 = assoc_rw.write().map_err(RuntimeError::PkeyGuardError)?;
+        let mut value1 = assoc_rw.mut_ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         *value1 = 84;
         println!("\tValue written via associated region deref(): {}", *value1);
-
-        let value = assoc_rw.read().map_err(RuntimeError::PkeyGuardError)?;
+    }
+    {
+        let assoc_rw = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
+        let value = assoc_rw.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         println!("\tValue read via associated region deref(): {}", *value);
 
         {
             let assoc2_rw = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
-            let value = assoc2_rw.write().map_err(RuntimeError::PkeyGuardError)?;
+            let value = assoc2_rw.mut_ref_guard().map_err(RuntimeError::PkeyGuardError)?;
             println!("\tValue read via second associated region deref(): {}", *value);
-
-            {
-                // /let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;   // <- segmentation fault occurs here
-                let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;
-                let value = assoc2_r.read().map_err(RuntimeError::PkeyGuardError)?;
-                println!("\tValue read via second associated region deref(): {}", *value);
-            }
         }
-
-        *value1 = 336;
-        println!("\tValue written via second associated region deref(): {}", *value1);
+        {
+            // /let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;   // <- segmentation fault occurs here
+            let assoc2_r = assoc2_for_mem2.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;
+            let value = assoc2_r.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
+            println!("\tValue read via second associated region deref(): {}", *value);
+        }
     }
     {
         let assoc_r = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
-        let value = assoc_r.read().map_err(RuntimeError::PkeyGuardError)?;
+        let value = assoc_r.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         println!("\tValue read via associated region deref(): {}", *value);
     }
 
