@@ -151,6 +151,10 @@ impl<'a, A: allocator::Allocator<T>, T> GuardRef<'a, A, T> {
             Err(GuardError::InvalidGeneration)
         }
     }
+
+    pub unsafe fn ptr(&self) -> *const T {
+        self.ptr as *const T
+    }
 }
 
 impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRef<'a, A, T> {

@@ -92,7 +92,7 @@ where
             self.pkey_guard.pop_permissions();
             self.popped.set(false);
         }
-        println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.pkey_guard.current_access_rights.get());
+        //println!("Dropped AssociatedRegion, reset PKey access rights to {:?}", self.pkey_guard.current_access_rights.get());
     }
 }
 
@@ -161,11 +161,11 @@ impl<A, T> PkeyGuard<A, T> {
     fn pop_permissions(&self) -> Option<PkeyAccessRights> {
         let popped = self.permissions_stack.borrow_mut().pop();
 
-        println!("[popped permissions: {:?}]", popped);
+        //println!("[popped permissions: {:?}]", popped);
 
         if let Some(top) = self.permissions_stack.borrow().last() {
             let top = *top;
-            println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), top);
+            //println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), top);
             unsafe {
                 self.pkey.set_access_rights(top).expect("Failed to set pkey access rights");
             }
@@ -178,8 +178,8 @@ impl<A, T> PkeyGuard<A, T> {
     fn push_permissions(&self, rights: PkeyAccessRights) {
         self.permissions_stack.borrow_mut().push(rights);
 
-        println!("[pushed permissions: {:?}]", rights);
-        println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), rights);
+        //println!("[pushed permissions: {:?}]", rights);
+        //println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), rights);
         unsafe {
             self.pkey.set_access_rights(rights).expect("Failed to set pkey access rights");
         }

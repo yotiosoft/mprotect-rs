@@ -241,6 +241,48 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
     Ok(())
 }
 
+fn sample_for_pkeyguard() {
+    // mprotect で確保したメモリ領域を持つ RegionGuard を生成
+    // デフォルトアクセス権は ReadWrite. 後に Intel PKU によりアクセス権を制御する
+    let mut region = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).unwrap();
+    // Intel PKU の Protection Key を生成
+    let pkey = PkeyGuard::new(PkeyPermissions::NoAccess).unwrap();
+    // RegionGuard と Protection Key を関連付ける
+    // 以降、RegionGuard のアクセス権は Protection Key により制御される
+    // 初期状態は NoAccess (-/-). アクセス不可
+    let mut associated_region = pkey.associate::<PkeyPermissions::NoAccess>(&mut region).unwrap();
+
+    // mutable な参照を取得し値を書き込む. read/write 可
+    {
+        // 参照を取得
+        // このとき、Protection Key のアクセス権が ReadWrite に変更され、RegionGuard への read/write アクセスが許可される
+        let write_guard = associated_region.set_access_rights::<PkeyPermissions::ReadWrite>().unwrap();
+        let mut mut_ref_guard = write_guard.mut_ref_guard().unwrap();
+        // write
+        *mut_ref_guard = 123;
+        // read
+        println!("Value written via associated region deref(): {}", *mut_ref_guard);
+    }
+    // immutable な参照を取得し値を読む. read のみ可
+    {
+        // 参照を取得
+        // このとき、Protection Key のアクセス権が ReadOnly に変更され、RegionGuard への read アクセスのみが許可される
+        let read_guard = associated_region.set_access_rights::<PkeyPermissions::ReadOnly>().unwrap();
+        let ref_guard = read_guard.ref_guard().unwrap();
+        // read
+        println!("Value read via associated region deref(): {}", *ref_guard);
+        // write は borrow checker によりコンパイルエラーになる
+        //*ref_guard = 456;
+
+        // unsafe code で無理やり mutable な参照を取得しようとすると、実行時に segmentation fault になる
+        unsafe {
+            let mut_ref = ref_guard.ptr() as *const u32 as *mut u32;
+            println!("Attempt to write via unsafe mutable reference...");
+            *mut_ref = 789;  // ここで segmentation fault になる
+        }
+    }
+}
+
 fn handle_child_exit(flag: String) {
     // Do workloads in a child process
     let status = Command::new(std::env::current_exe().unwrap())
@@ -279,6 +321,8 @@ fn parent_main() {
 
     println!("--- Testing RegionGuard with PKey Workloads ---");
     handle_child_exit("--regionguard-pkey".to_string());
+
+    sample_for_pkeyguard();
 
     println!("Parent process finished");
 }
