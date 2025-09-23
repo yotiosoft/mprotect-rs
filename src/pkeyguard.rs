@@ -1,4 +1,3 @@
-use crate::pkey;
 use crate::pkey::*;
 use crate::RegionGuard;
 use crate::GuardRef;
@@ -30,7 +29,7 @@ where
     popped: Cell<bool>,
 }
 
-impl<'a, 'r, 'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'p, A, T, Rights>
+impl<'p, A: allocator::Allocator<T>, T, Rights> AssociatedRegion<'p, A, T, Rights>
 where
     Rights: access_rights::Access,
 {
@@ -82,8 +81,8 @@ where
         unsafe { (*self.region).write().map_err(PkeyGuardError::RegionGuardError) }
     }
 }
-impl <'r, 'p, A: allocator::Allocator<T>, T, Rights> Drop for AssociatedRegion<'p, A, T, Rights>
-where 
+impl<'p, A: allocator::Allocator<T>, T, Rights> Drop for AssociatedRegion<'p, A, T, Rights>
+where
     Rights: access_rights::Access,
 {
     fn drop(&mut self) {
