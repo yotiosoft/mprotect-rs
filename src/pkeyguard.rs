@@ -124,6 +124,9 @@ where
         }
         println!("New PKey access rights set to {:?}", NewRights::new().value());
 
+        self.associated_region.popped.set(true);
+        self.pkey_guard.push_permissions(NewRights::new().value());
+
         Ok(AssociatedRegion {
             region: self.associated_region.region,
             pkey_guard: self.pkey_guard,

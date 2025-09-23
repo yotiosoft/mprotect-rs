@@ -215,7 +215,7 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
     }
     {
         let assoc_rw = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
-        let value = assoc_rw.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
+        let mut value = assoc_rw.mut_ref_guard().map_err(RuntimeError::PkeyGuardError)?;
         println!("\tValue read via associated region deref(): {}", *value);
 
         {
@@ -229,6 +229,8 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
             let value = assoc2_r.ref_guard().map_err(RuntimeError::PkeyGuardError)?;
             println!("\tValue read via second associated region deref(): {}", *value);
         }
+
+        *value = 168;
     }
     {
         let assoc_r = assoc_for_mem.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
@@ -249,7 +251,7 @@ fn handle_child_exit(flag: String) {
     if let Some(signal) = status.signal() {
         eprintln!("Child process exited with: {}", signal);
         if signal == 11 {
-            eprintln!("Segmentation fault occurred as expected");
+            eprintln!("Segmentation fault occurred");
             return;
         }
         eprintln!("Child process exited due to signal: {}", signal);
