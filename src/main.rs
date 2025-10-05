@@ -25,8 +25,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     let pkey = unsafe {
         PKey::new(PkeyAccessRights::EnableAccessWrite).map_err(RuntimeError::MprotectError)?
     };
-    let mut protected_mem = UnsafeProtectedRegion::<allocator::Mmap, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
-
+    let mut protected_mem = unsafe {
+        UnsafeProtectedRegion::<allocator::Mmap, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?
+    };
     unsafe {
         pkey.associate(&protected_mem, AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
     }
@@ -35,8 +36,10 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
     // Write to the protected memory
     println!("\tAttempt to write the value 42");
-    *protected_mem.as_mut() = 42;
-    println!("\t\tValue written: {}", *protected_mem.as_ref());
+    unsafe {
+        *protected_mem.as_mut() = 42;
+        println!("\t\tValue written: {}", *protected_mem.as_ref());
+    }
     println!("\t\tWriting succeeded");
 
     // Set the pkey to read-only
@@ -48,7 +51,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
     // Read from the protected memory
     println!("\tAttempt to read the value");
-    println!("\t\tValue read: {}", *protected_mem.as_ref());
+    unsafe {
+        println!("\t\tValue read: {}", *protected_mem.as_ref());
+    }
     println!("\t\tReading succeeded");
 
     // Create another pkey and allocate another memory region with it
@@ -58,13 +63,17 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
     };
 
     println!("\t\tCreated another pkey {}", pkey2.key());
-    let mut new_memory = UnsafeProtectedRegion::<allocator::Jmalloc, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
+    let mut new_memory = unsafe {
+        UnsafeProtectedRegion::<allocator::Jmalloc, u32>::new(AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?
+    };
     unsafe {
         pkey2.associate(&new_memory, AccessRights::READ_WRITE).map_err(RuntimeError::MprotectError)?;
     }
     println!("\tSet the value in pkey {} memory to 100", pkey2.key());
-    *new_memory.as_mut() = 100;
-    println!("\t\tValue in new memory: {}", *new_memory.as_ref());
+    unsafe {
+        *new_memory.as_mut() = 100;
+        println!("\t\tValue in new memory: {}", *new_memory.as_ref());
+    }
     println!("\t\tWriting to new memory succeeded");
 
     // Create another pkey and switch the pkey of the existing memory region to it
@@ -80,13 +89,18 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
     // Read from the memory region (should succeed)
     println!("\tAttempt to read the value");
-    println!("\t\tValue read: {}", *protected_mem.as_ref());
+    unsafe {
+        println!("\t\tValue read: {}", *protected_mem.as_ref());
+    }
     println!("\t\tReading succeeded");
 
     // Write to the memory region (should fail)
     println!("\tAttempt to write the value 84 (this will likely cause a segmentation fault!)");
-    *protected_mem.as_mut() = 84;
-    println!("\t\tValue written: {}", *protected_mem.as_ref());
+    unsafe {
+        *protected_mem.as_mut() = 84;
+        println!("\t\tValue written: {}", *protected_mem.as_ref());
+        println!("\t\tWriting succeeded (this is unexpected!)");
+    }
     println!("\t\tWriting succeeded (this is unexpected!)");
 
     // Set the pkey 1 to no access
@@ -98,7 +112,9 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 
     // This will likely cause a segmentation fault
     println!("\tAttempt to read the value again (this will likely cause a segmentation fault!)");
-    println!("\t\tValue read: {}", *protected_mem.as_ref());
+    unsafe {
+        println!("\t\tValue read: {}", *protected_mem.as_ref());
+    }
     println!("\t\tReading succeeded (this is unexpected!)");
 
     Err(RuntimeError::UnexpectedSuccess)

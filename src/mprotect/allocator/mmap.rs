@@ -7,7 +7,7 @@ pub struct Mmap {
 }
 
 impl<T> Allocator<T> for Mmap {
-    fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
+    unsafe fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let page_size = unsafe {
             libc::sysconf(libc::_SC_PAGESIZE) as usize
         };
@@ -35,7 +35,7 @@ impl<T> Allocator<T> for Mmap {
         })
     }
 
-    fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
+    unsafe fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
         // drop the inner value
         unsafe {
             std::ptr::drop_in_place(self.ptr);

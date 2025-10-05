@@ -13,7 +13,9 @@ pub struct RegionGuard<A: allocator::Allocator<T>, T> {
 impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     pub fn new<R: AllAccessesTrait>(access_rights: R) -> Result<Self, super::MprotectError> {
         let generation = Rc::new(Cell::new(0));
-        let memory = UnsafeProtectedRegion::new(access_rights.value())?;
+        let memory = unsafe {
+            UnsafeProtectedRegion::new(access_rights.value())?
+        };
         Ok(
             RegionGuard {
                 memory,
@@ -32,12 +34,14 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     pub fn read<'a>(&'a self) -> Result<GuardRef<'a, A, T>, GuardError> {
         if !self.access_rights.get().has(AccessRights::READ) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::READ));
-            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            unsafe {
+                self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            }
         }
 
         let gen = self.generation.get();
         Ok(GuardRef {
-            ptr: self.memory.as_ref(),
+            ptr: unsafe { self.memory.as_ref() },
             mem: &self.memory,
             gen,
             generation: Rc::clone(&self.generation),
@@ -49,12 +53,14 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     pub fn write<'a>(&'a mut self) -> Result<GuardRefMut<'a, A, T>, GuardError> {
         if !self.access_rights.get().contains(AccessRights::WRITE) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::WRITE));
-            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            unsafe {
+                self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            }
         }
 
         let gen = self.generation.get();
         Ok(GuardRefMut {
-            ptr: self.memory.as_mut() as *mut T,
+            ptr: unsafe { self.memory.as_mut() as *mut T },
             mem: &mut self.memory,
             gen,
             generation: Rc::clone(&self.generation),
@@ -66,12 +72,14 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     pub fn deref<R: ReadAllowedTrait>(&self, access_rights: R) -> Result<GuardRef<'_, A, T>, GuardError> {
         if !self.access_rights.get().contains(access_rights.value()) {
             self.access_rights.set(self.access_rights.get().add(access_rights.value()));
-            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            unsafe {
+                self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            }
         }
         
         let gen = self.generation.get();
         Ok(GuardRef {
-            ptr: self.memory.as_ref(),
+            ptr: unsafe { self.memory.as_ref() },
             mem: &self.memory,
             gen,
             generation: Rc::clone(&self.generation),
@@ -83,12 +91,14 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     pub fn deref_mut<R: WriteAllowedTrait>(&mut self, access_rights: R) -> Result<GuardRefMut<'_, A, T>, GuardError> {
         if !self.access_rights.get().contains(access_rights.value()) {
             self.access_rights.set(self.access_rights.get().add(access_rights.value()));
-            self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            unsafe {
+                self.memory.set_access(self.access_rights.get()).map_err(GuardError::CannotSetAccessRights)?;
+            }
         }
 
         let gen = self.generation.get();
         Ok(GuardRefMut {
-            ptr: self.memory.as_mut() as *mut T,
+            ptr: unsafe { self.memory.as_mut() as *mut T },
             mem: &mut self.memory,
             gen,
             generation: Rc::clone(&self.generation),
@@ -177,7 +187,7 @@ impl<'a, A: allocator::Allocator<T>, T> Drop for GuardRef<'a, A, T> {
                 return;
             } else if self.access_rights.get().contains(AccessRights::READ) {
                 let new_access = self.access_rights.get().minus(AccessRights::READ);
-                let _ = self.mem.set_access(new_access);
+                let _ = unsafe { self.mem.set_access(new_access) };
                 self.access_rights.set(new_access);
             }
         }
@@ -240,17 +250,17 @@ impl<A: allocator::Allocator<T>, T> Drop for GuardRefMut<'_, A, T> {
                 return;
             } else if !self.default_access_rights.has(AccessRights::WRITE) && self.access_rights.get().has(AccessRights::WRITE) {
                 let new_access = self.access_rights.get().minus(AccessRights::WRITE);
-                let _ = self.mem.set_access(new_access);
+                let _ = unsafe { self.mem.set_access(new_access) };
                 self.access_rights.set(new_access);
                 return;
             } else if !self.default_access_rights.has(AccessRights::READ) && self.access_rights.get().has(AccessRights::READ) {
                 let new_access = self.access_rights.get().minus(AccessRights::READ);
-                let _ = self.mem.set_access(new_access);
+                let _ = unsafe { self.mem.set_access(new_access) };
                 self.access_rights.set(new_access);
                 return;
             } else if self.access_rights.get().has(AccessRights::READ) || self.access_rights.get().has(AccessRights::WRITE) {
                 let new_access = self.access_rights.get().minus(AccessRights::READ_WRITE);
-                let _ = self.mem.set_access(new_access);
+                let _ = unsafe { self.mem.set_access(new_access) };
                 self.access_rights.set(new_access);
                 return;
             }

@@ -46,7 +46,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(UnsafeProtectedRegion)`: On successful allocation.
     /// - `Err(MprotectError)`: If memory allocation fails.
-    pub fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
+    pub unsafe fn new(access_rights: AccessRights) -> Result<Self, super::MprotectError> {
         let allocator = allocator::MemoryRegion::allocate(&access_rights)
             .map_err(|e| super::MprotectError::MemoryAllocationFailed(match e {
                 allocator::AllocatorError::MmapFailed(errno) => errno,
@@ -69,7 +69,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// # Returns
     /// - `Ok(())`: On successful change of access rights.
     /// - `Err(MprotectError)`: If the `mprotect` system call fails
-    pub fn set_access(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
+    pub unsafe fn set_access(&self, access_rights: AccessRights) -> Result<(), super::MprotectError> {
         let ret = unsafe {
             libc::mprotect(
                 self.ptr.as_ptr() as *mut libc::c_void,
@@ -109,15 +109,15 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
     /// Returns a mutable reference to the data stored in the memory region.
     /// # Returns
     /// - A mutable reference to the data stored in the memory region.
-    pub fn as_mut(&mut self) -> &mut T {
-        unsafe { &mut *self.ptr.as_ptr() }
+    pub unsafe fn as_mut(&mut self) -> &mut T {
+        &mut *self.ptr.as_ptr()
     }
 
     /// Returns a reference to the data stored in the memory region.
     /// # Returns
     /// - A reference to the data stored in the memory region.
-    pub fn as_ref(&self) -> &T {
-        unsafe { &*self.ptr.as_ptr() }
+    pub unsafe fn as_ref(&self) -> &T {
+        &*self.ptr.as_ptr()
     }
 }
 
@@ -125,7 +125,7 @@ impl<A: allocator::Allocator<T>, T> Drop for UnsafeProtectedRegion<A, T> {
     /// Automatically deallocates the memory region when the `UnsafeProtectedRegion`
     /// instance is dropped. If deallocation fails, it panics with an error message.
     fn drop(&mut self) {
-        let ret = self.allocator.deallocate();
+        let ret = unsafe { self.allocator.deallocate() };
         if let Err(e) = ret {
             panic!("Failed to deallocate memory: {:?}", e.to_string());
         }

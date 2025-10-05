@@ -9,7 +9,7 @@ pub struct Jmalloc {
 }
 
 impl<T> Allocator<T> for Jmalloc {
-    fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
+    unsafe fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let alloc_size = std::mem::size_of::<T>();
         let layout = Layout::from_size_align(alloc_size, std::mem::align_of::<T>())
             .map_err(|_| super::AllocatorError::LayoutError)?;
@@ -48,7 +48,7 @@ impl<T> Allocator<T> for Jmalloc {
         })
     }
 
-    fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
+    unsafe fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
         // drop the inner value
         unsafe {
             std::ptr::drop_in_place(self.ptr);
