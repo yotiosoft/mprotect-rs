@@ -257,23 +257,23 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
     Ok(())
 }
 
-fn sample_for_pkeyguard() {
+fn sample_for_pkeyguard() -> Result<(), RuntimeError> {
     // mprotect で確保したメモリ領域を持つ RegionGuard を生成
     // デフォルトアクセス権は ReadWrite. 後に Intel PKU によりアクセス権を制御する
-    let mut region = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).unwrap();
+    let mut region = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
     // Intel PKU の Protection Key を生成
-    let pkey = PkeyGuard::new(PkeyPermissions::NoAccess).unwrap();
+    let pkey = PkeyGuard::new(PkeyPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
     // RegionGuard と Protection Key を関連付ける
     // 以降、RegionGuard のアクセス権は Protection Key により制御される
     // 初期状態は NoAccess (-/-). アクセス不可
-    let mut associated_region = pkey.associate::<PkeyPermissions::NoAccess>(&mut region).unwrap();
+    let mut associated_region = pkey.associate::<PkeyPermissions::NoAccess>(&mut region).map_err(RuntimeError::MprotectError)?;
 
     // mutable な参照を取得し値を書き込む. read/write 可
     {
         // 参照を取得
         // このとき、Protection Key のアクセス権が ReadWrite に変更され、RegionGuard への read/write アクセスが許可される
-        let write_guard = associated_region.set_access_rights::<PkeyPermissions::ReadWrite>().unwrap();
-        let mut mut_ref_guard = write_guard.mut_ref_guard().unwrap();
+        let write_guard = associated_region.set_access_rights::<PkeyPermissions::ReadWrite>().map_err(RuntimeError::MprotectError)?;
+        let mut mut_ref_guard = write_guard.mut_ref_guard().map_err(|e| RuntimeError::PkeyGuardError(e))?;
         // write
         *mut_ref_guard = 123;
         // read
@@ -283,8 +283,8 @@ fn sample_for_pkeyguard() {
     {
         // 参照を取得
         // このとき、Protection Key のアクセス権が ReadOnly に変更され、RegionGuard への read アクセスのみが許可される
-        let read_guard = associated_region.set_access_rights::<PkeyPermissions::ReadOnly>().unwrap();
-        let ref_guard = read_guard.ref_guard().unwrap();
+        let read_guard = associated_region.set_access_rights::<PkeyPermissions::ReadOnly>().map_err(RuntimeError::MprotectError)?;
+        let ref_guard = read_guard.ref_guard().map_err(|e| RuntimeError::PkeyGuardError(e))?;
         // read
         println!("Value read via associated region deref(): {}", *ref_guard);
         // write は borrow checker によりコンパイルエラーになる
@@ -296,6 +296,8 @@ fn sample_for_pkeyguard() {
             println!("Attempt to write via unsafe mutable reference...");
             *mut_ref = 789;  // ここで segmentation fault になる
         }
+
+        Err(RuntimeError::UnexpectedSuccess)
     }
 }
 
@@ -338,7 +340,10 @@ fn parent_main() {
     println!("--- Testing RegionGuard with PKey Workloads ---");
     handle_child_exit("--regionguard-pkey".to_string());
 
-    sample_for_pkeyguard();
+    let ret = sample_for_pkeyguard();
+    if let Err(e) = ret {
+        eprintln!("sample_for_pkeyguard() failed, but this is expected if segmentation fault occurred: {}", e);
+    }
 
     println!("Parent process finished");
 }
