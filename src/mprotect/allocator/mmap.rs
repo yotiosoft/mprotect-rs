@@ -1,12 +1,42 @@
 use super::*;
 use libc;
 
+/// Memory allocator using the `mmap` system call.
+/// 
+/// This allocator uses `mmap` with anonymous memory mapping to allocate page-aligned
+/// memory regions. This is the recommended allocator for use with `mprotect` and
+/// `pkey_mprotect` as it guarantees page alignment and allows direct control over
+/// protection flags.
+/// 
+/// # Characteristics
+/// 
+/// - **Page-aligned**: Memory is always aligned to page boundaries (typically 4KB)
+/// - **Efficient for mprotect**: Direct support for memory protection flags
+/// - **System-level**: Memory is allocated directly from the operating system
+/// - **Large allocations**: Suitable for any size, but more efficient for larger allocations
 pub struct Mmap {
     ptr: *mut libc::c_void,
     size: usize,
 }
 
 impl<T> Allocator<T> for Mmap {
+    /// Allocates memory using `mmap` with the specified protection flags.
+    /// 
+    /// This method allocates page-aligned anonymous memory that can be used with
+    /// `mprotect` and `pkey_mprotect`. The size is rounded up to the nearest page size.
+    /// 
+    /// # Safety
+    /// 
+    /// This function is unsafe because it allocates uninitialized memory.
+    /// 
+    /// # Arguments
+    /// 
+    /// - `access_rights`: The initial protection flags for the memory region
+    /// 
+    /// # Returns
+    /// 
+    /// - `Ok(MemoryRegion)`: On successful allocation
+    /// - `Err(AllocatorError::MmapFailed)`: If the `mmap` system call fails
     unsafe fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let page_size = unsafe {
             libc::sysconf(libc::_SC_PAGESIZE) as usize
@@ -35,6 +65,18 @@ impl<T> Allocator<T> for Mmap {
         })
     }
 
+    /// Deallocates memory using `munmap`.
+    /// 
+    /// This method unmaps the memory region that was previously allocated with `mmap`.
+    /// 
+    /// # Safety
+    /// 
+    /// This function is unsafe because it frees memory that must not be accessed after deallocation.
+    /// 
+    /// # Returns
+    /// 
+    /// - `Ok(())`: On successful deallocation
+    /// - `Err(AllocatorError::MunmapFailed)`: If the `munmap` system call fails
     unsafe fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
         // drop the inner value
         unsafe {
@@ -50,5 +92,4 @@ impl<T> Allocator<T> for Mmap {
         }
         Ok(())
     }
-    
 }

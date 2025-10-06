@@ -3,12 +3,48 @@ use jemallocator::Jemalloc;
 use std::alloc::{GlobalAlloc, Layout};
 use std::ptr::NonNull;
 
+/// Memory allocator using jemalloc.
+/// 
+/// This allocator uses the jemalloc memory allocator to allocate memory regions,
+/// then applies `mprotect` to set the desired protection flags. Unlike `Mmap`,
+/// this allocator is not guaranteed to be page-aligned initially, but memory
+/// protection is still applied after allocation.
+/// 
+/// # Characteristics
+/// 
+/// - **Heap-based**: Memory is allocated from the heap using jemalloc
+/// - **Flexible size**: More efficient for small allocations compared to `Mmap`
+/// - **Secondary mprotect**: Requires additional `mprotect` call after allocation
+/// - **Not guaranteed page-aligned**: May require alignment adjustments for some use cases
+/// 
+/// # Note
+/// 
+/// This allocator is experimental and may have limitations when used with
+/// protection keys, as jemalloc-allocated memory might not always be page-aligned.
+/// For most use cases with `mprotect` and `pkey_mprotect`, prefer using `Mmap`.
 pub struct Jmalloc {
     ptr: *mut u8,
     layout: Layout,
 }
 
 impl<T> Allocator<T> for Jmalloc {
+    /// Allocates memory using jemalloc and applies `mprotect`.
+    /// 
+    /// This method first allocates memory using jemalloc's global allocator,
+    /// then applies the specified protection flags using `mprotect`.
+    /// 
+    /// # Safety
+    /// 
+    /// This function is unsafe because it allocates uninitialized memory.
+    /// 
+    /// # Arguments
+    /// 
+    /// - `access_rights`: The initial protection flags for the memory region
+    /// 
+    /// # Returns
+    /// 
+    /// - `Ok(MemoryRegion)`: On successful allocation
+    /// - `Err(AllocatorError::MmapFailed)`: If memory allocation or `mprotect` fails
     unsafe fn allocator_alloc(access_rights: &i32) -> Result<MemoryRegion<Self, T>, AllocatorError> {
         let alloc_size = std::mem::size_of::<T>();
         let layout = Layout::from_size_align(alloc_size, std::mem::align_of::<T>())
@@ -48,6 +84,17 @@ impl<T> Allocator<T> for Jmalloc {
         })
     }
 
+    /// Deallocates memory using jemalloc.
+    /// 
+    /// This method frees the memory that was previously allocated with jemalloc.
+    /// 
+    /// # Safety
+    /// 
+    /// This function is unsafe because it frees memory that must not be accessed after deallocation.
+    /// 
+    /// # Returns
+    /// 
+    /// - `Ok(())`: Always returns `Ok` as jemalloc deallocation does not fail
     unsafe fn allocator_dealloc(&self) -> Result<(), AllocatorError> {
         // drop the inner value
         unsafe {
@@ -59,5 +106,4 @@ impl<T> Allocator<T> for Jmalloc {
         };
         Ok(())
     }
-    
 }
