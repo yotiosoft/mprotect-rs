@@ -3,6 +3,13 @@ use crate::{mprotect::*, MprotectError};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::ops::{ Deref, DerefMut };
+
+/// A guard object that manages a protected memory region and its access rights.
+///
+/// `RegionGuard` encapsulates ownership and lifetime management of a memory region
+/// allocated through a custom allocator (`allocator::Allocator<T>`).  
+/// It provides safe, reference-counted control over access permissions and 
+/// integrates with Intel PKU.
 pub struct RegionGuard<A: allocator::Allocator<T>, T> {
     memory: UnsafeProtectedRegion<A, T>,
     generation: Rc<Cell<u64>>,
