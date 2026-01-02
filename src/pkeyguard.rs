@@ -1,3 +1,4 @@
+use crate::PkeyPermissions::RegionAccessRights;
 use crate::pkey::*;
 use crate::RegionGuard;
 use crate::GuardRef;
@@ -105,7 +106,7 @@ where
             return Ok(());
         }
         unsafe {
-            self.pkey_guard.pkey.set_access_rights(self.access_rights.value())?;
+            self.pkey_guard.pkey.set_access_rights(self.access_rights.value().pkey_rights)?;
         }
         self.pkey_guard.current_access_rights.set(self.access_rights.value());
         Ok(())
@@ -265,7 +266,7 @@ where
     {
         // Apply new hardware access rights via PKRU
         unsafe {
-            self.pkey_guard.pkey.set_access_rights(NewRights::new().value())?;
+            self.pkey_guard.pkey.set_access_rights(NewRights::new().value().pkey_rights)?;
         }
         println!("New PKey access rights set to {:?}", NewRights::new().value());
 
@@ -316,8 +317,8 @@ where
 /// After leaving the region’s scope, previous access rights are automatically restored.
 pub struct PkeyGuard<A, T> {
     pkey: PKey,
-    current_access_rights: Cell<PkeyAccessRights>,
-    permissions_stack: RefCell<Vec<PkeyAccessRights>>,
+    current_access_rights: Cell<RegionAccessRights>,
+    permissions_stack: RefCell<Vec<RegionAccessRights>>,
     _marker: std::marker::PhantomData<(A, T)>,
 }
 
@@ -339,7 +340,7 @@ impl<A, T> PkeyGuard<A, T> {
     /// restoring the previous permissions when leaving a scoped region.
     pub fn new<Access: access_rights::Access>(default_access_rights: Access) -> Result<Self, super::MprotectError> {
         let pkey = unsafe {
-            PKey::new(default_access_rights.value())?
+            PKey::new(default_access_rights.value().pkey_rights)?
         };
         Ok(
             PkeyGuard {
@@ -363,7 +364,7 @@ impl<A, T> PkeyGuard<A, T> {
     ///
     /// This method is typically called automatically by `Drop` implementations
     /// when an associated region or handler goes out of scope.
-    fn pop_permissions(&self) -> Option<PkeyAccessRights> {
+    fn pop_permissions(&self) -> Option<RegionAccessRights> {
         let popped = self.permissions_stack.borrow_mut().pop();
 
         //println!("[popped permissions: {:?}]", popped);
@@ -372,7 +373,7 @@ impl<A, T> PkeyGuard<A, T> {
             let top = *top;
             //println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), top);
             unsafe {
-                self.pkey.set_access_rights(top).expect("Failed to set pkey access rights");
+                self.pkey.set_access_rights(top.pkey_rights).expect("Failed to set pkey access rights");
             }
             self.current_access_rights.set(top);
         }
@@ -391,13 +392,13 @@ impl<A, T> PkeyGuard<A, T> {
     ///
     /// This mechanism allows nested permission changes to safely revert once
     /// a scope (e.g., `AssociatedRegion`) exits.
-    fn push_permissions(&self, rights: PkeyAccessRights) {
+    fn push_permissions(&self, rights: RegionAccessRights) {
         self.permissions_stack.borrow_mut().push(rights);
 
         //println!("[pushed permissions: {:?}]", rights);
         //println!("[Set pkey access rights from {:?} to {:?}]", self.current_access_rights.get(), rights);
         unsafe {
-            self.pkey.set_access_rights(rights).expect("Failed to set pkey access rights");
+            self.pkey.set_access_rights(rights.pkey_rights).expect("Failed to set pkey access rights");
         }
         self.current_access_rights.set(rights);
     }
@@ -433,7 +434,7 @@ impl<A, T> PkeyGuard<A, T> {
     {
         unsafe {
             self.pkey.associate(region.get_region(), region.access_rights())?;
-            self.pkey.set_access_rights(Rights::new().value())?;
+            self.pkey.set_access_rights(Rights::new().value().pkey_rights)?;
         }
         Ok(AssociatedRegionHandler::new(region, self))
     }

@@ -14,6 +14,7 @@ pub trait CanRead: Access {}
 pub trait CanWrite: Access {}
 
 /// Access rights implementations for protection keys and PTE access control.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RegionAccessRights {
     pub pkey_rights: PkeyAccessRights,
     pub pte_rights: AccessRights,
