@@ -21,12 +21,6 @@ Defense in Depth: Even if an attacker bypasses the borrow checker with unsafe co
 Thread-Local Isolation: Permissions are managed per-thread, as the PKRU register is part of the thread context.
 
 ## Usage
-Add this to your Cargo.toml:
-
-```TOML
-[dependencies]
-pkeyguard = "0.1.0"
-```
 
 Example: Secure Memory Access
 
