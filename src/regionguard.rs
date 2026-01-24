@@ -62,7 +62,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     /// 
     /// - `Ok(GuardRef)`: Read access wrapper.
     /// - `Err(GuardError)`: If access rights cannot be updated.
-    pub fn read<'a>(&'a self) -> Result<GuardRef<'a, A, T>, GuardError> {
+    pub fn read(&self) -> Result<GuardRef<'_, A, T>, GuardError> {
         if !self.access_rights.get().has(AccessRights::READ) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::READ));
             unsafe {
@@ -89,7 +89,7 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     /// 
     /// - `Ok(GuardRefMut)`: Write access wrapper.
     /// - `Err(GuardError)`: If access rights cannot be updated.
-    pub fn write<'a>(&'a mut self) -> Result<GuardRefMut<'a, A, T>, GuardError> {
+    pub fn write(&mut self) -> Result<GuardRefMut<'_, A, T>, GuardError> {
         if !self.access_rights.get().contains(AccessRights::WRITE) {
             self.access_rights.set(self.access_rights.get().add(AccessRights::WRITE));
             unsafe {
@@ -269,7 +269,7 @@ impl<'a, A: allocator::Allocator<T>, T> GuardRef<'a, A, T> {
         F: FnOnce(&T) -> R,
     {
         if self.is_valid() {
-            Ok(f(&*self.ptr))
+            Ok(f(self.ptr))
         } else {
             Err(GuardError::InvalidGeneration)
         }
@@ -295,7 +295,7 @@ impl<'a, A: allocator::Allocator<T>, T> Deref for GuardRef<'a, A, T> {
     /// Dereferences the guarded reference if valid, panicking otherwise.
     fn deref(&self) -> &Self::Target {
         if self.is_valid() {
-            &*self.ptr
+            self.ptr
         } else {
             panic!("Failed to deref GuardRef: invalid generation");
         }
@@ -312,7 +312,6 @@ impl<'a, A: allocator::Allocator<T>, T> Drop for GuardRef<'a, A, T> {
             if self.default_access_rights.contains(AccessRights::READ) {
                 // The default access rights already include Read, so no need to change
                 // because dropping a read guard should not remove read access if it was there by default
-                return;
             } else if self.access_rights.get().contains(AccessRights::READ) {
                 let new_access = self.access_rights.get().minus(AccessRights::READ);
                 let _ = unsafe { self.mem.set_access(new_access) };
@@ -417,7 +416,6 @@ impl<A: allocator::Allocator<T>, T> Drop for GuardRefMut<'_, A, T> {
             if self.default_access_rights.has(AccessRights::READ_WRITE) {
                 // The default access rights already include ReadWrite, so no need to change
                 // because dropping a write guard should not remove read/write access if it was there by default
-                return;
             } else if !self.default_access_rights.has(AccessRights::WRITE) && self.access_rights.get().has(AccessRights::WRITE) {
                 let new_access = self.access_rights.get().minus(AccessRights::WRITE);
                 let _ = unsafe { self.mem.set_access(new_access) };

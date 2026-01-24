@@ -1,7 +1,5 @@
 use core::panic;
 
-use libc;
-
 use std::ptr::NonNull;
 
 pub mod allocator;
@@ -118,7 +116,7 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
                 allocator::AllocatorError::LayoutError => -1,
             }))?;
         Ok(Self {
-            ptr: NonNull::new(allocator.ptr() as *mut T).ok_or(super::MprotectError::MemoryAllocationFailed(-1))?,
+            ptr: NonNull::new(allocator.ptr()).ok_or(super::MprotectError::MemoryAllocationFailed(-1))?,
             len: std::mem::size_of::<T>(),
             pkey_id: None,
             allocator,

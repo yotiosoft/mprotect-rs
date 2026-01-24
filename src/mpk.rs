@@ -1,4 +1,3 @@
-use libc;
 use std::fmt::Display;
 
 mod pkru;

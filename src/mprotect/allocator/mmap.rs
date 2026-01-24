@@ -48,7 +48,7 @@ impl<T> Allocator<T> for Mmap {
             libc::mmap(
                 std::ptr::null_mut(),
                 alloc_size,
-                access_rights.clone(),
+                *access_rights,
                 libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
                 -1,
                 0,
@@ -84,7 +84,7 @@ impl<T> Allocator<T> for Mmap {
         }
         // unmap the memory
         let ret = unsafe {
-            libc::munmap(self.ptr as *mut libc::c_void, self.size)
+            libc::munmap(self.ptr, self.size)
         };
         if ret != 0 {
             let err_no = std::io::Error::last_os_error().raw_os_error().unwrap();

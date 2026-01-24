@@ -66,7 +66,7 @@ impl<T> Allocator<T> for Jmalloc {
             libc::mprotect(
                 ptr as *mut libc::c_void,
                 alloc_size,
-                access_rights.clone(),
+                *access_rights,
             )
         };
         if ret != 0 {
