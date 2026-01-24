@@ -11,8 +11,8 @@
 //! - **Guard Types**: Type-safe memory regions with automatic permission management
 //! - **Multiple Allocators**: Support for both `mmap` and `jemalloc` allocation strategies
 
-mod pkey;
-pub use pkey::*;
+mod mpk;
+pub use mpk::*;
 
 mod mprotect;
 pub use mprotect::*;

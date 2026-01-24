@@ -1,4 +1,4 @@
-use crate::pkey::PkeyAccessRights;
+use crate::mpk::PkeyAccessRights;
 use crate::mprotect::access_rights::AccessRights;
 
 /// Represents basic access control for memory protection keys.

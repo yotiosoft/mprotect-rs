@@ -1,5 +1,5 @@
 use crate::PkeyPermissions::RegionAccessRights;
-use crate::pkey::*;
+use crate::mpk::*;
 use crate::RegionGuard;
 use crate::GuardRef;
 use crate::GuardRefMut;
