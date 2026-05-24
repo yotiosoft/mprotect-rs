@@ -31,11 +31,9 @@ impl<A: allocator::Allocator<T>, T> RegionGuard<A, T> {
     /// 
     /// - `Ok(RegionGuard)`: On success.
     /// - `Err(MprotectError)`: If memory allocation or protection setup fails.
-    pub fn new<R: AllAccessesTrait>(access_rights: R) -> Result<Self, super::MprotectError> {
+    pub fn new<R: AllAccessesTrait>(value: T, access_rights: R) -> Result<Self, super::MprotectError> {
         let generation = Rc::new(Cell::new(0));
-        let memory = unsafe {
-            UnsafeProtectedRegion::new(access_rights.value())?
-        };
+        let memory = UnsafeProtectedRegion::new_initialized(value, access_rights.value())?;
         Ok(
             RegionGuard {
                 memory,

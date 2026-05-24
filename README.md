@@ -30,7 +30,7 @@ use pkeyguard::{RegionGuard, PkeyGuard, AccessPermissions, PkeyPermissions, allo
 fn main() -> Result<(), RuntimeError> {
     // 1. Allocate a memory region via mmap/mprotect
     // Default is ReadWrite, but we will control access via PKU later.
-    let mut region = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite)
+    let mut region = RegionGuard::<allocator::Mmap, u32>::new(0, AccessPermissions::ReadWrite)
         .map_err(RuntimeError::MprotectError)?;
 
     // 2. Create a new Protection Key (Pkey)

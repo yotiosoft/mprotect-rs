@@ -121,7 +121,7 @@ fn child_pkey_workloads() -> Result<(), RuntimeError> {
 }
 
 fn child_regionguard_workloads() -> Result<(), RuntimeError> {
-    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(0, AccessPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
 
     {
         println!("\tCreated RegionGuard with ReadWrite access (should succeed)");
@@ -194,8 +194,8 @@ fn child_regionguard_workloads() -> Result<(), RuntimeError> {
 }
 
 fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
-    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
-    let mut safe_mem2 = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem = RegionGuard::<allocator::Mmap, u32>::new(0, AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
+    let mut safe_mem2 = RegionGuard::<allocator::Mmap, u32>::new(0, AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
     let pkey = PkeyGuard::new(PkeyPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
 
     let mut assoc_for_mem = pkey.associate::<PkeyPermissions::NoAccess>(&mut safe_mem).map_err(RuntimeError::MprotectError)?;
@@ -260,7 +260,7 @@ fn child_regionguard_with_pkey_workloads() -> Result<(), RuntimeError> {
 fn sample_for_pkeyguard() -> Result<(), RuntimeError> {
     // mprotect で確保したメモリ領域を持つ RegionGuard を生成
     // デフォルトアクセス権は ReadWrite. 後に Intel PKU によりアクセス権を制御する
-    let mut region = RegionGuard::<allocator::Mmap, u32>::new(AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
+    let mut region = RegionGuard::<allocator::Mmap, u32>::new(0, AccessPermissions::ReadWrite).map_err(RuntimeError::MprotectError)?;
     // Intel PKU の Protection Key を生成
     let pkey = PkeyGuard::new(PkeyPermissions::NoAccess).map_err(RuntimeError::MprotectError)?;
     // RegionGuard と Protection Key を関連付ける

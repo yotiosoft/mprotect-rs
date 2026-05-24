@@ -72,6 +72,7 @@ pub struct UnsafeProtectedRegion<A: allocator::Allocator<T>, T> {
     len: usize,
     pkey_id: Option<u32>,
     allocator: allocator::MemoryRegion<A, T>,
+    initialized: bool,
 }
 
 /// Implementation of methods for `UnsafeProtectedRegion`.
@@ -120,7 +121,24 @@ impl<A: allocator::Allocator<T>, T> UnsafeProtectedRegion<A, T> {
             len: std::mem::size_of::<T>(),
             pkey_id: None,
             allocator,
+            initialized: false,
         })
+    }
+
+    /// Allocates a new memory region and initializes it with `value`.
+    ///
+    /// The region is allocated with temporary read/write permissions so the value can
+    /// be written, then its permissions are changed to `access_rights` before return.
+    pub fn new_initialized(value: T, access_rights: AccessRights) -> Result<Self, super::MprotectError> {
+        let mut region = unsafe { Self::new(AccessRights::READ_WRITE)? };
+        unsafe {
+            std::ptr::write(region.ptr.as_ptr(), value);
+        }
+        region.initialized = true;
+        unsafe {
+            region.set_access(access_rights)?;
+        }
+        Ok(region)
     }
 
     /// Changes the access rights of the memory region using `mprotect`.
@@ -284,6 +302,13 @@ impl<A: allocator::Allocator<T>, T> Drop for UnsafeProtectedRegion<A, T> {
     /// **Warning**: If deallocation fails, this method will panic. Deallocation failures
     /// are rare but can occur due to memory corruption or invalid memory regions.
     fn drop(&mut self) {
+        if self.initialized {
+            let _ = unsafe { self.set_access(AccessRights::READ_WRITE) };
+            unsafe {
+                std::ptr::drop_in_place(self.ptr.as_ptr());
+            }
+            self.initialized = false;
+        }
         let ret = unsafe { self.allocator.deallocate() };
         if let Err(e) = ret {
             panic!("Failed to deallocate memory: {:?}", e.to_string());
